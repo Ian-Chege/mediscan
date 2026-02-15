@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { getSeverityColor } from '@/lib/utils';
+import { Colors } from '@/constants/Colors';
 
 interface Interaction {
   drug1: string;
@@ -24,13 +25,17 @@ export function InteractionWarning({ interactions }: InteractionWarningProps) {
         styles.container,
         hasHighSeverity ? styles.containerHigh : styles.containerModerate,
       ]}
+      accessibilityRole="alert"
+      accessibilityLabel={`${interactions.length} drug interaction${interactions.length > 1 ? 's' : ''} found`}
     >
       <View style={styles.header}>
-        <FontAwesome
-          name="exclamation-triangle"
-          size={20}
-          color={hasHighSeverity ? '#991B1B' : '#92400E'}
-        />
+        <View style={[styles.iconCircle, hasHighSeverity ? styles.iconCircleHigh : styles.iconCircleModerate]}>
+          <FontAwesome
+            name="exclamation-triangle"
+            size={16}
+            color={hasHighSeverity ? '#991B1B' : '#92400E'}
+          />
+        </View>
         <Text
           style={[
             styles.headerText,
@@ -45,7 +50,7 @@ export function InteractionWarning({ interactions }: InteractionWarningProps) {
         <View key={index} style={styles.interactionItem}>
           <View style={styles.drugPair}>
             <Text style={styles.drugName}>{interaction.drug1}</Text>
-            <FontAwesome name="exchange" size={12} color="#6B7280" />
+            <FontAwesome name="exchange" size={10} color={Colors.textTertiary} />
             <Text style={styles.drugName}>{interaction.drug2}</Text>
             <View
               style={[
@@ -61,7 +66,7 @@ export function InteractionWarning({ interactions }: InteractionWarningProps) {
       ))}
 
       <View style={styles.disclaimer}>
-        <FontAwesome name="user-md" size={14} color="#6B7280" />
+        <FontAwesome name="user-md" size={13} color={Colors.textSecondary} />
         <Text style={styles.disclaimerText}>
           Please consult your doctor or pharmacist about these interactions.
         </Text>
@@ -72,28 +77,39 @@ export function InteractionWarning({ interactions }: InteractionWarningProps) {
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
   },
   containerHigh: {
     backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
   },
   containerModerate: {
     backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 14,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconCircleHigh: {
+    backgroundColor: '#FECACA',
+  },
+  iconCircleModerate: {
+    backgroundColor: '#FDE68A',
   },
   headerText: {
     fontSize: 16,
     fontWeight: '700',
+    letterSpacing: -0.3,
   },
   headerTextHigh: {
     color: '#991B1B',
@@ -111,18 +127,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 4,
+    marginBottom: 6,
     flexWrap: 'wrap',
   },
   drugName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1F2937',
+    color: Colors.text,
   },
   severityBadge: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   severityText: {
     fontSize: 11,
@@ -133,7 +149,7 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 13,
     color: '#4B5563',
-    lineHeight: 18,
+    lineHeight: 19,
   },
   disclaimer: {
     flexDirection: 'row',
@@ -144,7 +160,7 @@ const styles = StyleSheet.create({
   },
   disclaimerText: {
     fontSize: 12,
-    color: '#6B7280',
+    color: Colors.textSecondary,
     fontStyle: 'italic',
     flex: 1,
   },

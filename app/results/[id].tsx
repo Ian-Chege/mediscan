@@ -14,8 +14,9 @@ import { MedicationCard } from '@/components/MedicationCard';
 import { InteractionWarning } from '@/components/InteractionWarning';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import Markdown from 'react-native-markdown-display';
-import { Colors } from '@/constants/Colors';
+import { Colors, Shadows } from '@/constants/Colors';
 import { formatDateTime } from '@/lib/utils';
+import { useUser } from '@/contexts/UserContext';
 
 // Convex hooks — imported conditionally once Convex is configured
 let useMutation: any, useQuery: any, api: any;
@@ -28,9 +29,8 @@ try {
   // Convex not yet set up
 }
 
-const DEMO_USER_ID = null;
-
 export default function ScanResultsScreen() {
+  const userId = useUser();
   const { id, data } = useLocalSearchParams<{ id: string; data?: string }>();
 
   // If id is "local", data was passed via route params (no Convex user yet)
@@ -58,13 +58,13 @@ export default function ScanResultsScreen() {
 
   const handleAddToMeds = useCallback(
     async (med: { name: string; dosage: string; frequency: string }) => {
-      if (!DEMO_USER_ID || !addMedication) {
+      if (!userId || !addMedication) {
         Alert.alert('Setup Required', 'Connect Convex to save medications.');
         return;
       }
       try {
         await addMedication({
-          userId: DEMO_USER_ID as any,
+          userId: userId as any,
           name: med.name,
           dosage: med.dosage,
           frequency: med.frequency,
@@ -77,7 +77,7 @@ export default function ScanResultsScreen() {
         Alert.alert('Error', 'Failed to add medication.');
       }
     },
-    [addMedication],
+    [userId, addMedication],
   );
 
   if (!isLocal && scan === undefined) {
@@ -88,12 +88,11 @@ export default function ScanResultsScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <FontAwesome
-            name="exclamation-circle"
-            size={48}
-            color={Colors.danger}
-          />
-          <Text style={styles.errorText}>Scan not found</Text>
+          <View style={styles.errorIcon}>
+            <FontAwesome name="exclamation-circle" size={32} color={Colors.danger} />
+          </View>
+          <Text style={styles.errorTitle}>Scan not found</Text>
+          <Text style={styles.errorText}>This scan may have been deleted</Text>
         </View>
       </SafeAreaView>
     );
@@ -102,10 +101,13 @@ export default function ScanResultsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Date */}
-        <Text style={styles.date}>
-          Scanned {formatDateTime(scan.scannedAt)}
-        </Text>
+        {/* Date badge */}
+        <View style={styles.dateBadge}>
+          <FontAwesome name="clock-o" size={12} color={Colors.textSecondary} />
+          <Text style={styles.dateText}>
+            {formatDateTime(scan.scannedAt)}
+          </Text>
+        </View>
 
         {/* Interaction warnings */}
         {scan.interactions.length > 0 && (
@@ -136,10 +138,12 @@ export default function ScanResultsScreen() {
               />
               <View style={styles.cardActions}>
                 <Pressable
-                  style={styles.addButton}
+                  style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
                   onPress={() => handleAddToMeds(med)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${med.name} to my medications`}
                 >
-                  <FontAwesome name="plus" size={14} color="#FFFFFF" />
+                  <FontAwesome name="plus" size={12} color={Colors.textInverse} />
                   <Text style={styles.addButtonText}>Add to My Meds</Text>
                 </Pressable>
               </View>
@@ -151,11 +155,9 @@ export default function ScanResultsScreen() {
         {scan.explanation && (
           <View style={styles.explanationCard}>
             <View style={styles.explanationHeader}>
-              <FontAwesome
-                name="lightbulb-o"
-                size={20}
-                color={Colors.primary}
-              />
+              <View style={styles.explanationIconCircle}>
+                <FontAwesome name="lightbulb-o" size={16} color={Colors.accent} />
+              </View>
               <Text style={styles.explanationTitle}>What You Should Know</Text>
             </View>
             <Markdown style={markdownStyles}>{scan.explanation}</Markdown>
@@ -164,11 +166,7 @@ export default function ScanResultsScreen() {
 
         {/* Disclaimer */}
         <View style={styles.disclaimerCard}>
-          <FontAwesome
-            name="info-circle"
-            size={16}
-            color={Colors.textSecondary}
-          />
+          <FontAwesome name="info-circle" size={14} color={Colors.textTertiary} />
           <Text style={styles.disclaimerText}>
             This information is for reference only and does not replace
             professional medical advice. Always consult your healthcare provider
@@ -192,6 +190,7 @@ const markdownStyles = StyleSheet.create({
     color: Colors.text,
     marginTop: 12,
     marginBottom: 6,
+    letterSpacing: -0.3,
   },
   heading2: {
     fontSize: 16,
@@ -199,6 +198,7 @@ const markdownStyles = StyleSheet.create({
     color: Colors.text,
     marginTop: 10,
     marginBottom: 4,
+    letterSpacing: -0.2,
   },
   heading3: {
     fontSize: 15,
@@ -240,16 +240,29 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
-  date: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+  dateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
     marginBottom: 16,
+    ...Shadows.sm,
+  },
+  dateText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
     marginBottom: 12,
+    letterSpacing: -0.3,
   },
   cardActions: {
     flexDirection: 'row',
@@ -263,45 +276,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: Colors.secondary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    ...Shadows.sm,
+  },
+  addButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
   },
   addButtonText: {
-    color: '#FFFFFF',
+    color: Colors.textInverse,
     fontSize: 13,
     fontWeight: '600',
   },
   explanationCard: {
     backgroundColor: Colors.card,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     marginTop: 8,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    ...Shadows.sm,
   },
   explanationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    gap: 10,
+    marginBottom: 14,
+  },
+  explanationIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.accentSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   explanationTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: Colors.text,
+    letterSpacing: -0.3,
   },
   disclaimerCard: {
     flexDirection: 'row',
-    gap: 8,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
-    padding: 12,
+    gap: 10,
+    backgroundColor: Colors.surfaceHover,
+    borderRadius: 12,
+    padding: 14,
   },
   disclaimerText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: Colors.textTertiary,
     lineHeight: 18,
     flex: 1,
   },
@@ -309,10 +335,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
+    padding: 40,
+  },
+  errorIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.dangerSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
   },
   errorText: {
-    fontSize: 18,
+    fontSize: 14,
     color: Colors.textSecondary,
   },
 });

@@ -16,8 +16,9 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { CameraCapture } from '@/components/CameraCapture';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/EmptyState';
-import { Colors } from '@/constants/Colors';
+import { Colors, Shadows } from '@/constants/Colors';
 import { formatDateTime } from '@/lib/utils';
+import { useUser } from '@/contexts/UserContext';
 
 // Convex hooks — imported conditionally once Convex is configured
 let useAction: any, useMutation: any, useQuery: any, api: any;
@@ -31,9 +32,8 @@ try {
   // Convex not yet set up
 }
 
-const DEMO_USER_ID = null;
-
 export default function ScanScreen() {
+  const userId = useUser();
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
   const [prescriptionText, setPrescriptionText] = useState('');
@@ -44,10 +44,10 @@ export default function ScanScreen() {
   const generateExplanation = api && useAction ? useAction(api.ai.generateExplanation) : null;
   const saveScan = api && useMutation ? useMutation(api.scans.save) : null;
   const scans = api && useQuery
-    ? (DEMO_USER_ID ? useQuery(api.scans.list, { userId: DEMO_USER_ID as any }) : undefined)
+    ? useQuery(api.scans.list, userId ? { userId: userId as any } : "skip")
     : undefined;
   const activeMeds = api && useQuery
-    ? (DEMO_USER_ID ? useQuery(api.medications.listActive, { userId: DEMO_USER_ID as any }) : undefined)
+    ? useQuery(api.medications.listActive, userId ? { userId: userId as any } : "skip")
     : undefined;
 
   // Shared logic: take extracted meds → check interactions → get explanation → navigate
@@ -87,10 +87,10 @@ export default function ScanScreen() {
       });
 
       // Save and navigate
-      if (DEMO_USER_ID && saveScan) {
+      if (userId && saveScan) {
         setProcessingStep('Saving results...');
         const scanId = await saveScan({
-          userId: DEMO_USER_ID as any,
+          userId: userId as any,
           extractedMedications: extracted.medications,
           interactions,
           explanation: explanation ?? 'No explanation available.',
@@ -112,7 +112,7 @@ export default function ScanScreen() {
         });
       }
     },
-    [checkInteractions, generateExplanation, saveScan, activeMeds],
+    [userId, checkInteractions, generateExplanation, saveScan, activeMeds],
   );
 
   // Handle image scan
@@ -179,88 +179,103 @@ export default function ScanScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        {/* Header */}
         <View style={styles.header}>
-          <FontAwesome name="plus-square" size={28} color={Colors.primary} />
-          <Text style={styles.headerTitle}>MediScan</Text>
-        </View>
-
-        {/* Text input for quick prescription lookup */}
-        <View style={styles.textInputSection}>
-          <Text style={styles.sectionTitle}>Type a Prescription</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              value={prescriptionText}
-              onChangeText={setPrescriptionText}
-              placeholder='e.g. "Bruffen 1x3" or "Amoxicillin 500mg twice daily"'
-              placeholderTextColor={Colors.textSecondary}
-              returnKeyType="search"
-              onSubmitEditing={handleTextLookup}
-            />
-            <Pressable
-              style={[styles.lookupButton, !prescriptionText.trim() && styles.lookupButtonDisabled]}
-              onPress={handleTextLookup}
-              disabled={!prescriptionText.trim()}
-            >
-              <FontAwesome name="search" size={18} color="#FFFFFF" />
-            </Pressable>
+          <View>
+            <Text style={styles.greeting}>Welcome to</Text>
+            <Text style={styles.brand}>MediScan</Text>
+          </View>
+          <View style={styles.brandIcon}>
+            <FontAwesome name="plus-square" size={20} color={Colors.primary} />
           </View>
         </View>
+
+        {/* Scan options — camera & gallery side by side */}
+        <Text style={styles.sectionLabel}>Scan a Prescription</Text>
+        <CameraCapture onImageCaptured={handleImageCaptured} />
 
         {/* Divider */}
         <View style={styles.divider}>
           <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or scan</Text>
+          <Text style={styles.dividerText}>or type it</Text>
           <View style={styles.dividerLine} />
         </View>
 
-        {/* Camera capture */}
-        <CameraCapture onImageCaptured={handleImageCaptured} />
-
-        <Text style={styles.hint}>
-          Take a photo of your prescription or select from gallery
-        </Text>
+        {/* Text input */}
+        <View style={styles.inputWrapper}>
+          <View style={styles.inputContainer}>
+            <FontAwesome name="pencil" size={14} color={Colors.textTertiary} style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              value={prescriptionText}
+              onChangeText={setPrescriptionText}
+              placeholder='e.g. "Bruffen 1x3" or "Amoxicillin 500mg"'
+              placeholderTextColor={Colors.textTertiary}
+              returnKeyType="search"
+              onSubmitEditing={handleTextLookup}
+              accessibilityLabel="Type a prescription"
+            />
+          </View>
+          <Pressable
+            style={({ pressed }) => [
+              styles.searchButton,
+              !prescriptionText.trim() && styles.searchButtonDisabled,
+              pressed && prescriptionText.trim() && styles.searchButtonPressed,
+            ]}
+            onPress={handleTextLookup}
+            disabled={!prescriptionText.trim()}
+            accessibilityRole="button"
+            accessibilityLabel="Search prescription"
+          >
+            <FontAwesome name="arrow-right" size={16} color={Colors.textInverse} />
+          </Pressable>
+        </View>
 
         {/* Recent Scans */}
         <View style={styles.recentSection}>
-          <Text style={styles.sectionTitle}>Recent Scans</Text>
+          <Text style={styles.sectionLabel}>Recent Scans</Text>
           {!scans || scans.length === 0 ? (
-            <EmptyState
-              icon="file-text-o"
-              title="No scans yet"
-              message="Scan or type your first prescription to get started"
-            />
+            <View style={styles.recentEmpty}>
+              <View style={styles.recentEmptyIcon}>
+                <FontAwesome name="file-text-o" size={20} color={Colors.textTertiary} />
+              </View>
+              <Text style={styles.recentEmptyText}>
+                Your scan history will appear here
+              </Text>
+            </View>
           ) : (
             <FlatList
               data={scans}
               horizontal
-              scrollEnabled={false}
+              scrollEnabled
               showsHorizontalScrollIndicator={false}
               keyExtractor={(item: any) => item._id}
               renderItem={({ item }: any) => (
                 <Pressable
-                  style={styles.scanCard}
+                  style={({ pressed }) => [styles.scanCard, pressed && styles.scanCardPressed]}
                   onPress={() => router.push(`/results/${item._id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`View scan with ${item.extractedMedications.length} medications`}
                 >
-                  <FontAwesome name="file-text" size={24} color={Colors.primary} />
+                  <View style={styles.scanCardHeader}>
+                    <FontAwesome name="file-text" size={16} color={Colors.primary} />
+                    {item.interactions.length > 0 && (
+                      <FontAwesome name="exclamation-circle" size={12} color={Colors.danger} />
+                    )}
+                  </View>
                   <Text style={styles.scanCardMeds}>
-                    {item.extractedMedications.length} medication
-                    {item.extractedMedications.length !== 1 ? 's' : ''}
+                    {item.extractedMedications.length} med{item.extractedMedications.length !== 1 ? 's' : ''}
                   </Text>
                   <Text style={styles.scanCardDate}>
                     {formatDateTime(item.scannedAt)}
                   </Text>
-                  {item.interactions.length > 0 && (
-                    <View style={styles.warningDot}>
-                      <FontAwesome name="exclamation-circle" size={14} color={Colors.danger} />
-                    </View>
-                  )}
                 </Pressable>
               )}
             />
           )}
         </View>
 
+        {/* Disclaimer */}
         <Text style={styles.disclaimer}>
           For informational purposes only. Not a substitute for professional medical advice.
         </Text>
@@ -275,61 +290,48 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    paddingBottom: 24,
+    paddingBottom: 32,
   },
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 10,
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
-  headerTitle: {
-    fontSize: 24,
+  greeting: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  brand: {
+    fontSize: 28,
     fontWeight: '800',
     color: Colors.text,
+    letterSpacing: -0.8,
   },
-  textInputSection: {
-    paddingHorizontal: 20,
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 10,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: Colors.text,
-  },
-  lookupButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    width: 48,
+  brandIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: Colors.primarySoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  lookupButtonDisabled: {
-    opacity: 0.4,
+  sectionLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    letterSpacing: -0.2,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginVertical: 16,
+    marginVertical: 20,
   },
   dividerLine: {
     flex: 1,
@@ -337,54 +339,111 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.border,
   },
   dividerText: {
-    marginHorizontal: 12,
+    marginHorizontal: 14,
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: Colors.textTertiary,
+    fontWeight: '500',
   },
-  hint: {
-    textAlign: 'center',
-    color: Colors.textSecondary,
-    fontSize: 14,
-    paddingHorizontal: 40,
+  inputWrapper: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 20,
+  },
+  inputContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.card,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    ...Shadows.sm,
+  },
+  inputIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: Colors.text,
+  },
+  searchButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadows.md,
+  },
+  searchButtonDisabled: {
+    backgroundColor: Colors.textTertiary,
+    ...Shadows.sm,
+  },
+  searchButtonPressed: {
+    backgroundColor: Colors.primaryDark,
+    transform: [{ scale: 0.95 }],
   },
   recentSection: {
-    marginTop: 24,
-    paddingHorizontal: 20,
+    marginTop: 28,
+  },
+  recentEmpty: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 20,
+    backgroundColor: Colors.card,
+    padding: 20,
+    borderRadius: 16,
+    ...Shadows.sm,
+  },
+  recentEmptyIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: Colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  recentEmptyText: {
+    fontSize: 14,
+    color: Colors.textTertiary,
+    flex: 1,
   },
   scanCard: {
     backgroundColor: Colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginRight: 12,
-    width: 140,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
+    borderRadius: 14,
+    padding: 14,
+    marginLeft: 20,
+    width: 120,
     gap: 6,
+    ...Shadows.sm,
+  },
+  scanCardPressed: {
+    backgroundColor: Colors.surfaceHover,
+    transform: [{ scale: 0.97 }],
+  },
+  scanCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   scanCardMeds: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: Colors.text,
-    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   scanCardDate: {
     fontSize: 11,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
-  warningDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
+    color: Colors.textTertiary,
   },
   disclaimer: {
     textAlign: 'center',
-    color: Colors.textSecondary,
+    color: Colors.textTertiary,
     fontSize: 11,
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: 40,
+    paddingTop: 24,
     paddingBottom: 8,
-    fontStyle: 'italic',
   },
 });

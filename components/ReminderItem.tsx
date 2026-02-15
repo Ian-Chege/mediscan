@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Colors } from '@/constants/Colors';
+import { Colors, Shadows } from '@/constants/Colors';
 import { parseTime, formatTime } from '@/lib/utils';
 
 interface ReminderItemProps {
@@ -28,26 +28,41 @@ export function ReminderItem({
     days.includes('daily') ? 'Every day' : days.join(', ');
 
   return (
-    <View style={[styles.container, !isActive && styles.containerInactive]}>
-      <View style={styles.timeSection}>
-        <Text style={styles.time}>{displayTime}</Text>
+    <View
+      style={[styles.container, !isActive && styles.containerInactive]}
+      accessibilityLabel={`Reminder for ${medicationName}, ${displayTime}, ${displayDays}`}
+    >
+      <View style={styles.timeBlock}>
+        <Text style={[styles.time, !isActive && styles.timeInactive]}>{displayTime}</Text>
         <Text style={styles.days}>{displayDays}</Text>
       </View>
 
+      <View style={styles.divider} />
+
       <View style={styles.medSection}>
-        <Text style={styles.medName}>{medicationName}</Text>
-        <Text style={styles.medDosage}>{medicationDosage}</Text>
+        <Text style={[styles.medName, !isActive && styles.medNameInactive]}>{medicationName}</Text>
+        {medicationDosage ? (
+          <Text style={styles.medDosage}>{medicationDosage}</Text>
+        ) : null}
       </View>
 
       <View style={styles.actions}>
         <Switch
           value={isActive}
           onValueChange={onToggle}
-          trackColor={{ false: Colors.border, true: Colors.secondary }}
-          thumbColor="#FFFFFF"
+          trackColor={{ false: Colors.border, true: Colors.primaryLight }}
+          thumbColor={Colors.surface}
+          accessibilityRole="switch"
+          accessibilityLabel={`${isActive ? 'Disable' : 'Enable'} reminder for ${medicationName}`}
         />
-        <Pressable onPress={onDelete} hitSlop={8}>
-          <FontAwesome name="trash-o" size={18} color={Colors.danger} />
+        <Pressable
+          onPress={onDelete}
+          hitSlop={12}
+          style={({ pressed }) => [styles.deleteButton, pressed && styles.deleteButtonPressed]}
+          accessibilityRole="button"
+          accessibilityLabel={`Delete reminder for ${medicationName}`}
+        >
+          <FontAwesome name="trash-o" size={16} color={Colors.danger} />
         </Pressable>
       </View>
     </View>
@@ -59,36 +74,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.card,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    ...Shadows.sm,
   },
   containerInactive: {
-    opacity: 0.5,
+    opacity: 0.55,
   },
-  timeSection: {
-    marginRight: 16,
-    minWidth: 80,
+  timeBlock: {
+    minWidth: 76,
   },
   time: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '800',
     color: Colors.primary,
+    letterSpacing: -0.5,
+  },
+  timeInactive: {
+    color: Colors.textTertiary,
   },
   days: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.textSecondary,
     marginTop: 2,
+    fontWeight: '500',
+  },
+  divider: {
+    width: 1,
+    height: 36,
+    backgroundColor: Colors.border,
+    marginHorizontal: 14,
   },
   medSection: {
     flex: 1,
   },
   medName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
     color: Colors.text,
+    letterSpacing: -0.2,
+  },
+  medNameInactive: {
+    color: Colors.textTertiary,
   },
   medDosage: {
     fontSize: 13,
@@ -98,6 +126,12 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+  },
+  deleteButton: {
+    padding: 4,
+  },
+  deleteButtonPressed: {
+    opacity: 0.5,
   },
 });

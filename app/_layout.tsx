@@ -5,6 +5,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { StatusBar } from 'expo-status-bar';
+import { Colors } from '@/constants/Colors';
+import { UserProvider } from '@/contexts/UserContext';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -56,6 +58,16 @@ function RootLayoutNav() {
           options={{
             title: 'Scan Results',
             headerBackTitle: 'Back',
+            headerStyle: {
+              backgroundColor: Colors.background,
+            },
+            headerTitleStyle: {
+              fontWeight: '700',
+              fontSize: 17,
+              color: Colors.text,
+            },
+            headerTintColor: Colors.primary,
+            headerShadowVisible: false,
           }}
         />
       </Stack>
@@ -63,7 +75,11 @@ function RootLayoutNav() {
   );
 
   if (convex) {
-    return <ConvexProvider client={convex}>{content}</ConvexProvider>;
+    return (
+      <ConvexProvider client={convex}>
+        <UserProvider>{content}</UserProvider>
+      </ConvexProvider>
+    );
   }
 
   // If Convex is not configured yet, render without provider
