@@ -27,9 +27,11 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE"
-      ]
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.ianoviewcy.mediscan"
     },
     "web": {
       "bundler": "metro",
@@ -55,6 +57,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2fc83746-ec89-4e19-b46c-17fbe738e6f8"
+      }
     }
   }
 }

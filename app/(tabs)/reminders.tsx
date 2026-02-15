@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Alert,
   FlatList,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -13,8 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { ReminderItem } from '@/components/ReminderItem';
 import { EmptyState } from '@/components/EmptyState';
-import { Colors } from '@/constants/Colors';
-import { useTheme, AppColors } from '@/hooks/useTheme';
+import { Colors, Shadows } from '@/constants/Colors';
+import { useUser } from '@/contexts/UserContext';
 // TODO: Re-enable when using a development build instead of Expo Go
 // import { scheduleMedicationReminder, cancelReminder } from '@/lib/notifications';
 import { parseTime } from '@/lib/utils';
@@ -30,8 +31,6 @@ try {
   // Convex not yet set up
 }
 
-const DEMO_USER_ID = null;
-
 const DAYS_OPTIONS = [
   { label: 'Every day', value: 'daily' },
   { label: 'Mon', value: 'monday' },
@@ -44,18 +43,17 @@ const DAYS_OPTIONS = [
 ];
 
 export default function RemindersScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const userId = useUser();
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedTime, setSelectedTime] = useState('08:00');
   const [selectedDays, setSelectedDays] = useState<string[]>(['daily']);
   const [selectedMedId, setSelectedMedId] = useState<string | null>(null);
 
   const reminders = api && useQuery
-    ? (DEMO_USER_ID ? useQuery(api.reminders.list, { userId: DEMO_USER_ID as any }) : undefined)
+    ? useQuery(api.reminders.list, userId ? { userId: userId as any } : "skip")
     : undefined;
   const medications = api && useQuery
-    ? (DEMO_USER_ID ? useQuery(api.medications.listActive, { userId: DEMO_USER_ID as any }) : undefined)
+    ? useQuery(api.medications.listActive, userId ? { userId: userId as any } : "skip")
     : undefined;
   const addReminder = api && useMutation ? useMutation(api.reminders.add) : null;
   const toggleReminder = api && useMutation ? useMutation(api.reminders.toggleActive) : null;
@@ -94,7 +92,7 @@ export default function RemindersScreen() {
       );
       return;
     }
-    if (!DEMO_USER_ID || !addReminder) {
+    if (!userId || !addReminder) {
       Alert.alert('Setup Required', 'Connect Convex to save reminders.');
       return;
     }
@@ -107,7 +105,7 @@ export default function RemindersScreen() {
       // const notificationId = await scheduleMedicationReminder(...)
 
       await addReminder({
-        userId: DEMO_USER_ID as any,
+        userId: userId as any,
         medicationId: selectedMedId as any,
         time: selectedTime,
         days: selectedDays,
@@ -120,7 +118,7 @@ export default function RemindersScreen() {
     } catch {
       Alert.alert('Error', 'Failed to create reminder.');
     }
-  }, [selectedMedId, selectedTime, selectedDays, medications, addReminder]);
+  }, [userId, selectedMedId, selectedTime, selectedDays, medications, addReminder]);
 
   const toggleDay = (day: string) => {
     if (day === 'daily') {
@@ -138,11 +136,18 @@ export default function RemindersScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Reminders</Text>
+      </View>
+
       {!reminders || reminders.length === 0 ? (
         <EmptyState
           icon="bell-o"
           title="No reminders set"
-          message="Add reminders to never miss a dose"
+          message="Never miss a dose — set reminders for your medications"
+          actionLabel="Add Reminder"
+          onAction={() => setShowAddModal(true)}
         />
       ) : (
         <FlatList
@@ -171,9 +176,14 @@ export default function RemindersScreen() {
         />
       )}
 
-      {/* Add button */}
-      <Pressable style={styles.fab} onPress={() => setShowAddModal(true)}>
-        <FontAwesome name="plus" size={24} color="#FFFFFF" />
+      {/* FAB */}
+      <Pressable
+        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+        onPress={() => setShowAddModal(true)}
+        accessibilityRole="button"
+        accessibilityLabel="Add reminder"
+      >
+        <FontAwesome name="plus" size={22} color={Colors.textInverse} />
       </Pressable>
 
       {/* Add Reminder Modal */}
@@ -186,59 +196,69 @@ export default function RemindersScreen() {
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add Reminder</Text>
-            <Pressable onPress={() => setShowAddModal(false)}>
-              <FontAwesome
-                name="times"
-                size={24}
-                color={colors.textSecondary}
-              />
+            <Pressable
+              onPress={() => setShowAddModal(false)}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <FontAwesome name="times" size={22} color={Colors.textSecondary} />
             </Pressable>
           </View>
 
-          <View style={styles.form}>
+          <ScrollView style={styles.form} keyboardShouldPersistTaps="handled">
             {/* Medication selector */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Medication</Text>
               {!medications || medications.length === 0 ? (
-                <Text style={styles.noMedsText}>
-                  No active medications. Add one in the My Meds tab first.
-                </Text>
+                <View style={styles.noMedsCard}>
+                  <FontAwesome name="info-circle" size={14} color={Colors.textTertiary} />
+                  <Text style={styles.noMedsText}>
+                    No active medications. Add one in the My Meds tab first.
+                  </Text>
+                </View>
               ) : (
                 <View style={styles.medOptions}>
-                  {medications.map((med: any) => (
-                    <Pressable
-                      key={med._id}
-                      style={[
-                        styles.medOption,
-                        selectedMedId === med._id && styles.medOptionActive,
-                      ]}
-                      onPress={() => setSelectedMedId(med._id)}
-                    >
-                      <Text
-                        style={[
-                          styles.medOptionText,
-                          selectedMedId === med._id &&
-                            styles.medOptionTextActive,
+                  {medications.map((med: any) => {
+                    const isSelected = selectedMedId === med._id;
+                    return (
+                      <Pressable
+                        key={med._id}
+                        style={({ pressed }) => [
+                          styles.medOption,
+                          isSelected && styles.medOptionActive,
+                          pressed && styles.medOptionPressed,
                         ]}
+                        onPress={() => setSelectedMedId(med._id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
                       >
-                        {med.name}
-                      </Text>
-                    </Pressable>
-                  ))}
+                        <Text
+                          style={[
+                            styles.medOptionText,
+                            isSelected && styles.medOptionTextActive,
+                          ]}
+                        >
+                          {med.name}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               )}
             </View>
 
             {/* Time input */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Time (HH:MM, 24h format)</Text>
+              <Text style={styles.label}>Time (24h format)</Text>
               <TextInput
                 style={styles.input}
                 value={selectedTime}
                 onChangeText={setSelectedTime}
                 placeholder="08:00"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={Colors.textTertiary}
                 keyboardType="numbers-and-punctuation"
+                accessibilityLabel="Reminder time"
               />
             </View>
 
@@ -246,170 +266,215 @@ export default function RemindersScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Days</Text>
               <View style={styles.daysRow}>
-                {DAYS_OPTIONS.map((day) => (
-                  <Pressable
-                    key={day.value}
-                    style={[
-                      styles.dayChip,
-                      selectedDays.includes(day.value) && styles.dayChipActive,
-                    ]}
-                    onPress={() => toggleDay(day.value)}
-                  >
-                    <Text
-                      style={[
-                        styles.dayChipText,
-                        selectedDays.includes(day.value) &&
-                          styles.dayChipTextActive,
+                {DAYS_OPTIONS.map((day) => {
+                  const isSelected = selectedDays.includes(day.value);
+                  return (
+                    <Pressable
+                      key={day.value}
+                      style={({ pressed }) => [
+                        styles.dayChip,
+                        isSelected && styles.dayChipActive,
+                        pressed && styles.dayChipPressed,
                       ]}
+                      onPress={() => toggleDay(day.value)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: isSelected }}
                     >
-                      {day.label}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Text
+                        style={[
+                          styles.dayChipText,
+                          isSelected && styles.dayChipTextActive,
+                        ]}
+                      >
+                        {day.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
 
-            <Pressable style={styles.saveButton} onPress={handleAdd}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.saveButton,
+                !selectedMedId && styles.saveButtonDisabled,
+                pressed && selectedMedId && styles.saveButtonPressed,
+              ]}
+              onPress={handleAdd}
+              disabled={!selectedMedId}
+              accessibilityRole="button"
+              accessibilityLabel="Set reminder"
+            >
               <Text style={styles.saveButtonText}>Set Reminder</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
 }
 
-function createStyles(colors: AppColors) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    list: {
-      padding: 20,
-      paddingBottom: 100,
-    },
-    fab: {
-      position: 'absolute',
-      bottom: 24,
-      right: 24,
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: Colors.primary,
-      justifyContent: 'center',
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-      elevation: 5,
-    },
-    modalContainer: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    modalHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 20,
-      paddingVertical: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: colors.text,
-    },
-    form: {
-      padding: 20,
-      gap: 20,
-    },
-    inputGroup: {
-      gap: 8,
-    },
-    label: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: colors.text,
-    },
-    input: {
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 8,
-      padding: 12,
-      fontSize: 16,
-      color: colors.text,
-    },
-    noMedsText: {
-      fontSize: 14,
-      color: colors.textSecondary,
-      fontStyle: 'italic',
-    },
-    medOptions: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    medOption: {
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 8,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    medOptionActive: {
-      backgroundColor: Colors.primary,
-      borderColor: Colors.primary,
-    },
-    medOptionText: {
-      fontSize: 14,
-      color: colors.text,
-      fontWeight: '500',
-    },
-    medOptionTextActive: {
-      color: '#FFFFFF',
-    },
-    daysRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    dayChip: {
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 20,
-      backgroundColor: colors.card,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    dayChipActive: {
-      backgroundColor: Colors.primary,
-      borderColor: Colors.primary,
-    },
-    dayChipText: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      fontWeight: '500',
-    },
-    dayChipTextActive: {
-      color: '#FFFFFF',
-    },
-    saveButton: {
-      backgroundColor: Colors.primary,
-      borderRadius: 8,
-      padding: 16,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    saveButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-  });
-}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.text,
+    letterSpacing: -0.8,
+  },
+  list: {
+    padding: 20,
+    paddingBottom: 100,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Shadows.lg,
+  },
+  fabPressed: {
+    backgroundColor: Colors.primaryDark,
+    transform: [{ scale: 0.93 }],
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.borderLight,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text,
+    letterSpacing: -0.3,
+  },
+  form: {
+    padding: 20,
+  },
+  inputGroup: {
+    marginBottom: 24,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  input: {
+    backgroundColor: Colors.card,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    color: Colors.text,
+  },
+  noMedsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.card,
+    padding: 16,
+    borderRadius: 12,
+  },
+  noMedsText: {
+    fontSize: 14,
+    color: Colors.textTertiary,
+    flex: 1,
+  },
+  medOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  medOption: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: Colors.card,
+    ...Shadows.sm,
+  },
+  medOptionActive: {
+    backgroundColor: Colors.primary,
+  },
+  medOptionPressed: {
+    transform: [{ scale: 0.96 }],
+  },
+  medOptionText: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  medOptionTextActive: {
+    color: Colors.textInverse,
+  },
+  daysRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dayChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    backgroundColor: Colors.card,
+    ...Shadows.sm,
+  },
+  dayChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  dayChipPressed: {
+    transform: [{ scale: 0.95 }],
+  },
+  dayChipText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  dayChipTextActive: {
+    color: Colors.textInverse,
+  },
+  saveButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 14,
+    padding: 18,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 40,
+    ...Shadows.md,
+  },
+  saveButtonDisabled: {
+    backgroundColor: Colors.textTertiary,
+  },
+  saveButtonPressed: {
+    backgroundColor: Colors.primaryDark,
+    transform: [{ scale: 0.98 }],
+  },
+  saveButtonText: {
+    color: Colors.textInverse,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+});

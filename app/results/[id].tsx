@@ -14,9 +14,9 @@ import { MedicationCard } from '@/components/MedicationCard';
 import { InteractionWarning } from '@/components/InteractionWarning';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import Markdown from 'react-native-markdown-display';
-import { Colors } from '@/constants/Colors';
-import { useTheme, AppColors } from '@/hooks/useTheme';
+import { Colors, Shadows } from '@/constants/Colors';
 import { formatDateTime } from '@/lib/utils';
+import { useUser } from '@/contexts/UserContext';
 
 // Convex hooks — imported conditionally once Convex is configured
 let useMutation: any, useQuery: any, api: any;
@@ -29,12 +29,8 @@ try {
   // Convex not yet set up
 }
 
-const DEMO_USER_ID = null;
-
 export default function ScanResultsScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
-  const markdownStyles = useMemo(() => createMarkdownStyles(colors), [colors]);
+  const userId = useUser();
   const { id, data } = useLocalSearchParams<{ id: string; data?: string }>();
 
   // If id is "local", data was passed via route params (no Convex user yet)
@@ -62,13 +58,13 @@ export default function ScanResultsScreen() {
 
   const handleAddToMeds = useCallback(
     async (med: { name: string; dosage: string; frequency: string }) => {
-      if (!DEMO_USER_ID || !addMedication) {
+      if (!userId || !addMedication) {
         Alert.alert('Setup Required', 'Connect Convex to save medications.');
         return;
       }
       try {
         await addMedication({
-          userId: DEMO_USER_ID as any,
+          userId: userId as any,
           name: med.name,
           dosage: med.dosage,
           frequency: med.frequency,
@@ -81,7 +77,7 @@ export default function ScanResultsScreen() {
         Alert.alert('Error', 'Failed to add medication.');
       }
     },
-    [addMedication],
+    [userId, addMedication],
   );
 
   if (!isLocal && scan === undefined) {
@@ -92,12 +88,11 @@ export default function ScanResultsScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
-          <FontAwesome
-            name="exclamation-circle"
-            size={48}
-            color={Colors.danger}
-          />
-          <Text style={styles.errorText}>Scan not found</Text>
+          <View style={styles.errorIcon}>
+            <FontAwesome name="exclamation-circle" size={32} color={Colors.danger} />
+          </View>
+          <Text style={styles.errorTitle}>Scan not found</Text>
+          <Text style={styles.errorText}>This scan may have been deleted</Text>
         </View>
       </SafeAreaView>
     );
@@ -106,10 +101,13 @@ export default function ScanResultsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Date */}
-        <Text style={styles.date}>
-          Scanned {formatDateTime(scan.scannedAt)}
-        </Text>
+        {/* Date badge */}
+        <View style={styles.dateBadge}>
+          <FontAwesome name="clock-o" size={12} color={Colors.textSecondary} />
+          <Text style={styles.dateText}>
+            {formatDateTime(scan.scannedAt)}
+          </Text>
+        </View>
 
         {/* Interaction warnings */}
         {scan.interactions.length > 0 && (
@@ -140,10 +138,12 @@ export default function ScanResultsScreen() {
               />
               <View style={styles.cardActions}>
                 <Pressable
-                  style={styles.addButton}
+                  style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
                   onPress={() => handleAddToMeds(med)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${med.name} to my medications`}
                 >
-                  <FontAwesome name="plus" size={14} color="#FFFFFF" />
+                  <FontAwesome name="plus" size={12} color={Colors.textInverse} />
                   <Text style={styles.addButtonText}>Add to My Meds</Text>
                 </Pressable>
               </View>
@@ -155,11 +155,9 @@ export default function ScanResultsScreen() {
         {scan.explanation && (
           <View style={styles.explanationCard}>
             <View style={styles.explanationHeader}>
-              <FontAwesome
-                name="lightbulb-o"
-                size={20}
-                color={Colors.primary}
-              />
+              <View style={styles.explanationIconCircle}>
+                <FontAwesome name="lightbulb-o" size={16} color={Colors.accent} />
+              </View>
               <Text style={styles.explanationTitle}>What You Should Know</Text>
             </View>
             <Markdown style={markdownStyles}>{scan.explanation}</Markdown>
@@ -168,11 +166,7 @@ export default function ScanResultsScreen() {
 
         {/* Disclaimer */}
         <View style={styles.disclaimerCard}>
-          <FontAwesome
-            name="info-circle"
-            size={16}
-            color={colors.textSecondary}
-          />
+          <FontAwesome name="info-circle" size={14} color={Colors.textTertiary} />
           <Text style={styles.disclaimerText}>
             This information is for reference only and does not replace
             professional medical advice. Always consult your healthcare provider
@@ -184,145 +178,182 @@ export default function ScanResultsScreen() {
   );
 }
 
-function createMarkdownStyles(colors: AppColors) {
-  return StyleSheet.create({
-    body: {
-      fontSize: 14,
-      color: colors.text,
-      lineHeight: 22,
-    },
-    heading1: {
-      fontSize: 18,
-      fontWeight: '700' as const,
-      color: colors.text,
-      marginTop: 12,
-      marginBottom: 6,
-    },
-    heading2: {
-      fontSize: 16,
-      fontWeight: '700' as const,
-      color: colors.text,
-      marginTop: 10,
-      marginBottom: 4,
-    },
-    heading3: {
-      fontSize: 15,
-      fontWeight: '600' as const,
-      color: colors.text,
-      marginTop: 8,
-      marginBottom: 4,
-    },
-    strong: {
-      fontWeight: '700' as const,
-      color: colors.text,
-    },
-    bullet_list: {
-      marginVertical: 4,
-    },
-    ordered_list: {
-      marginVertical: 4,
-    },
-    list_item: {
-      flexDirection: 'row' as const,
-      marginVertical: 2,
-    },
-    bullet_list_icon: {
-      fontSize: 14,
-      color: Colors.primary,
-      marginRight: 8,
-    },
-    paragraph: {
-      marginVertical: 4,
-    },
-  });
-}
+const markdownStyles = StyleSheet.create({
+  body: {
+    fontSize: 14,
+    color: Colors.text,
+    lineHeight: 22,
+  },
+  heading1: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginTop: 12,
+    marginBottom: 6,
+    letterSpacing: -0.3,
+  },
+  heading2: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: Colors.text,
+    marginTop: 10,
+    marginBottom: 4,
+    letterSpacing: -0.2,
+  },
+  heading3: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: Colors.text,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  strong: {
+    fontWeight: '700' as const,
+    color: Colors.text,
+  },
+  bullet_list: {
+    marginVertical: 4,
+  },
+  ordered_list: {
+    marginVertical: 4,
+  },
+  list_item: {
+    flexDirection: 'row' as const,
+    marginVertical: 2,
+  },
+  bullet_list_icon: {
+    fontSize: 14,
+    color: Colors.primary,
+    marginRight: 8,
+  },
+  paragraph: {
+    marginVertical: 4,
+  },
+});
 
-function createStyles(colors: AppColors) {
-  return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    content: {
-      padding: 20,
-      paddingBottom: 40,
-    },
-    date: {
-      fontSize: 14,
-      color: colors.textSecondary,
-      marginBottom: 16,
-    },
-    sectionTitle: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: colors.text,
-      marginBottom: 12,
-    },
-    cardActions: {
-      flexDirection: 'row',
-      gap: 8,
-      marginTop: -4,
-      marginBottom: 16,
-      paddingHorizontal: 4,
-    },
-    addButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      backgroundColor: Colors.secondary,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
-      borderRadius: 6,
-    },
-    addButtonText: {
-      color: '#FFFFFF',
-      fontSize: 13,
-      fontWeight: '600',
-    },
-    explanationCard: {
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      padding: 16,
-      marginTop: 8,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    explanationHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginBottom: 12,
-    },
-    explanationTitle: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: colors.text,
-    },
-    disclaimerCard: {
-      flexDirection: 'row',
-      gap: 8,
-      backgroundColor: colors.card,
-      borderRadius: 8,
-      padding: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    disclaimerText: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      lineHeight: 18,
-      flex: 1,
-    },
-    errorContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      gap: 12,
-    },
-    errorText: {
-      fontSize: 18,
-      color: colors.textSecondary,
-    },
-  });
-}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  dateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginBottom: 16,
+    ...Shadows.sm,
+  },
+  dateText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 12,
+    letterSpacing: -0.3,
+  },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: -4,
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.secondary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    ...Shadows.sm,
+  },
+  addButtonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
+  addButtonText: {
+    color: Colors.textInverse,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  explanationCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    padding: 18,
+    marginTop: 8,
+    marginBottom: 16,
+    ...Shadows.sm,
+  },
+  explanationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+  },
+  explanationIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.accentSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  explanationTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.text,
+    letterSpacing: -0.3,
+  },
+  disclaimerCard: {
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: Colors.surfaceHover,
+    borderRadius: 12,
+    padding: 14,
+  },
+  disclaimerText: {
+    fontSize: 12,
+    color: Colors.textTertiary,
+    lineHeight: 18,
+    flex: 1,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    padding: 40,
+  },
+  errorIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.dangerSoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  errorText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+});

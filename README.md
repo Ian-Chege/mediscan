@@ -2,6 +2,36 @@
 
 AI-powered prescription scanner — snap a photo or type a shorthand like `Bruffen 1x3`, and get extracted medication details, drug interaction checks, and plain-language explanations.
 
+## Try It Now
+
+**[Download the APK](https://expo.dev/accounts/ianoviewcy/projects/mediscan/builds/cf04c1d4-b220-4107-92e9-b3f3c2dab0af)** — open this link on your Android phone, install the app, and start scanning. No setup required.
+
+> Android only for now. iOS support is coming.
+
+---
+
+## Screenshots
+
+<p align="center">
+  <img src="assets/screenshots/scan-screen.jpg" width="200" alt="Scan screen" />
+  <img src="assets/screenshots/results-interactions.jpg" width="200" alt="Scan results with drug interactions" />
+  <img src="assets/screenshots/results-explanation.jpg" width="200" alt="AI-generated medication explanation" />
+</p>
+<p align="center">
+  <img src="assets/screenshots/my-meds-screen.jpg" width="200" alt="My Meds list" />
+  <img src="assets/screenshots/add-reminder-screen.jpg" width="200" alt="Add Reminder form" />
+</p>
+
+---
+
+## How It Works
+
+1. **Scan or type** a prescription — camera, gallery, or text input like `Augmentin 1g 1x2`
+2. **GPT-4o** extracts medication names, dosages, and frequencies
+3. **OpenFDA** checks for drug interactions against your existing medications
+4. **GPT-4o** generates a plain-language explanation with tips
+5. **Save** medications to your list and set reminders
+
 ---
 
 ## Tech Stack
@@ -17,7 +47,7 @@ AI-powered prescription scanner — snap a photo or type a shorthand like `Bruff
 
 ---
 
-## Getting Started
+## Development Setup
 
 ### Prerequisites
 
@@ -30,16 +60,16 @@ AI-powered prescription scanner — snap a photo or type a shorthand like `Bruff
 git clone <repo-url> && cd mediscan
 npm install
 
-# 2. Create your local env file (get the URL from the team)
+# 2. Create your local env file (get the values from the team)
 cp .env.example .env.local
 
 # 3. Start the app
 npx expo start
 ```
 
-Scan the QR code with Expo Go on your phone, or press `i` / `a` for simulators.
+Scan the QR code with Expo Go on your phone, or press `a` for Android emulator.
 
-> **Note:** The Convex backend and API keys are already configured on the shared deployment. You just need the `EXPO_PUBLIC_CONVEX_URL` value in your `.env.local` — ask a team member or check the pinned message in chat.
+> **Note:** The Convex backend and API keys are already configured on the shared deployment. You just need the `EXPO_PUBLIC_CONVEX_URL` value in your `.env.local` — ask a team member.
 
 ### Environment Variables
 
@@ -50,6 +80,18 @@ Scan the QR code with Expo Go on your phone, or press `i` / `a` for simulators.
 
 > The OpenFDA API is public and requires no key.
 
+### Building a New APK
+
+```bash
+# Deploy latest Convex functions to production
+npx convex deploy --yes
+
+# Build preview APK on EAS cloud
+eas build --profile preview --platform android
+```
+
+The build takes ~10 minutes. EAS returns a download link you can share with the team.
+
 ---
 
 ## Project Structure
@@ -57,8 +99,7 @@ Scan the QR code with Expo Go on your phone, or press `i` / `a` for simulators.
 ```
 mediscan/
 ├── app/                              # Screens (file-based routing)
-│   ├── _layout.tsx                   # Root layout, Convex provider
-│   ├── +not-found.tsx                # 404
+│   ├── _layout.tsx                   # Root layout, Convex + User providers
 │   ├── (tabs)/
 │   │   ├── _layout.tsx               # Tab bar (Scan, My Meds, Reminders)
 │   │   ├── index.tsx                 # Scan screen
@@ -75,7 +116,10 @@ mediscan/
 │   ├── LoadingSpinner.tsx            # Activity indicator
 │   └── EmptyState.tsx                # Empty list placeholder
 │
-├── convex/                           # Backend (deployed to Convex)
+├── contexts/
+│   └── UserContext.tsx               # Anonymous user identity (AsyncStorage)
+│
+├── convex/                           # Backend (deployed to Convex cloud)
 │   ├── schema.ts                     # Database schema
 │   ├── ai.ts                         # OpenAI actions
 │   ├── drugApi.ts                    # OpenFDA interaction check
@@ -89,86 +133,56 @@ mediscan/
 │   ├── utils.ts                      # Date formatting, helpers
 │   └── notifications.ts              # Notification scheduling helpers
 │
-├── hooks/
-│   └── useNotifications.ts           # Push notification hook
-│
 └── constants/
-    └── Colors.ts                     # Color palette
+    └── Colors.ts                     # Color palette + shadow presets
 ```
 
 ---
 
-## What's Implemented
+## Features
 
-### Scan Screen (`app/(tabs)/index.tsx`)
+### Scan Screen
+- **Text input** — type shorthand like `Bruffen 1x3` or `Amoxicillin 500mg twice daily`
+- **Image scanning** — take a photo or pick from gallery
+- **Processing pipeline**: extract meds (GPT-4o) → check interactions (OpenFDA) → generate explanation (GPT-4o) → show results
+- **Recent scans** section with interaction warning indicators
 
-- **Text input** — type a shorthand like `Bruffen 1x3` or `Amoxicillin 500mg twice daily`
-- **Image scanning** — take a photo with camera or pick from gallery
-- **Processing pipeline**: extract meds (GPT-4o) → check interactions (OpenFDA) → generate explanation (GPT-4o) → navigate to results
-- **Recent scans** section (shows when connected to Convex with a user ID)
-
-### Results Screen (`app/results/[id].tsx`)
-
-- Displays extracted medications with confidence badges (high/medium/low)
+### Results Screen
+- Extracted medications with confidence badges
 - Drug interaction warnings color-coded by severity
-- AI-generated plain-language explanation rendered as markdown
+- AI-generated plain-language explanation with tips per medication
 - "Add to My Meds" button per medication
-- Works in local mode (data via route params) or database mode (Convex query)
 
-### My Meds Screen (`app/(tabs)/medications.tsx`)
+### My Meds
+- Active / All filter toggle
+- Pause/resume and delete medications
+- Add medications manually (name, dosage, frequency, purpose, instructions)
 
-- List medications with Active / All filter toggle
-- Pause/resume and delete individual medications
-- Add medications manually via modal form (name, dosage, frequency, purpose, instructions)
-- Deleting a medication cascades to its reminders
-
-### Reminders Screen (`app/(tabs)/reminders.tsx`)
-
-- List reminders with medication name, time, days
-- Toggle reminders on/off, delete with confirmation
-- Add reminders via modal: pick a medication, set time (24h), choose days (daily or specific)
+### Reminders
+- Set reminders for saved medications
+- Pick time (24h) and days (daily or specific weekdays)
+- Toggle on/off and delete with confirmation
 
 ### Convex Backend
 
 | File | Functions |
 |------|-----------|
-| `ai.ts` | `extractMedications` (image → meds), `extractFromText` (text → meds), `generateExplanation` (meds + interactions → summary) |
-| `drugApi.ts` | `checkInteractions` (queries OpenFDA `/drug/label.json`, parses severity from keywords) |
+| `ai.ts` | `extractMedications` (image), `extractFromText` (text), `generateExplanation` |
+| `drugApi.ts` | `checkInteractions` (OpenFDA `/drug/label.json`) |
 | `scans.ts` | `list`, `get`, `save`, `remove` |
 | `medications.ts` | `list`, `listActive`, `get`, `add`, `update`, `toggleActive`, `remove` |
-| `reminders.ts` | `list` (enriches with medication name/dosage), `add`, `update`, `toggleActive`, `remove` |
+| `reminders.ts` | `list` (enriched with medication info), `add`, `update`, `toggleActive`, `remove` |
 | `users.ts` | `getOrCreate`, `get`, `updatePushToken` |
 
 ---
 
-## Current State & What to Know
+## Current State
 
-A few things to be aware of before working on this:
+**Anonymous user identity** — On first launch, the app creates an anonymous user and persists the ID on-device via AsyncStorage. Scans, medications, and reminders are saved per-device. No login/signup flow yet.
 
-**`DEMO_USER_ID` is `null`** — Every screen sets `const DEMO_USER_ID = null`. This means Convex queries and mutations that require a user ID won't fire until a real user ID is wired in. Scanning still works because results are passed via route params (local mode), but saving to the database, listing medications/reminders, etc. require replacing this placeholder with an actual user flow.
+**Notifications disabled** — Notification scheduling code is written (`lib/notifications.ts`) but commented out. Requires a development build (not Expo Go) to work.
 
-**Notifications are disabled** — The `useNotifications()` hook call is commented out in `app/_layout.tsx`, and notification scheduling is commented out in `reminders.tsx`. The helper functions in `lib/notifications.ts` are fully written but require a development build (not Expo Go) to work.
-
-**No auth** — `users.ts` has a `getOrCreate` mutation for anonymous users, but no login/signup flow or session management exists yet.
-
-**Graceful degradation** — The app is designed to work without Convex configured. The root layout conditionally wraps with `<ConvexProvider>` only if `EXPO_PUBLIC_CONVEX_URL` is set. Convex hooks are imported inside try/catch blocks so the app compiles even with stub `_generated/` files.
-
----
-
-## Database Schema
-
-Four tables defined in `convex/schema.ts`:
-
-**users** — `name?`, `pushToken?`, `createdAt`
-
-**medications** — `userId`, `name`, `dosage`, `frequency`, `instructions?`, `purpose?`, `isActive`, `startDate?`, `endDate?`, `createdAt`
-  - Indexes: `by_user`, `by_user_active`
-
-**reminders** — `userId`, `medicationId`, `time` (HH:MM), `days` (string[]), `isActive`, `notificationId?`, `createdAt`
-  - Indexes: `by_user`, `by_medication`
-
-**scans** — `userId`, `imageStorageId?`, `extractedMedications` (array), `interactions` (array), `explanation`, `scannedAt`
-  - Index: `by_user`
+**Graceful degradation** — The app works without Convex configured. Convex hooks are imported via try/catch and the root layout conditionally wraps with `<ConvexProvider>`.
 
 ---
 
@@ -176,8 +190,8 @@ Four tables defined in `convex/schema.ts`:
 
 ```bash
 npm start          # expo start
-npm run ios        # expo start --ios
 npm run android    # expo start --android
+npm run ios        # expo start --ios
 npm run web        # expo start --web
 ```
 
