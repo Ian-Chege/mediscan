@@ -1,25 +1,23 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import 'react-native-reanimated';
+import { ConvexProvider, ConvexReactClient } from 'convex/react';
+import { StatusBar } from 'expo-status-bar';
 
-import { useColorScheme } from '@/components/useColorScheme';
-
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
+export { ErrorBoundary } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: '(tabs)',
 };
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+// Initialize Convex client
+// The EXPO_PUBLIC_CONVEX_URL env var is set after running `npx convex dev`
+const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
+const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -27,7 +25,9 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
+  // TODO: Re-enable when using a development build instead of Expo Go
+  // useNotifications();
+
   useEffect(() => {
     if (error) throw error;
   }, [error]);
@@ -46,14 +46,26 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+  const content = (
+    <>
+      <StatusBar style="dark" />
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+        <Stack.Screen
+          name="results/[id]"
+          options={{
+            title: 'Scan Results',
+            headerBackTitle: 'Back',
+          }}
+        />
       </Stack>
-    </ThemeProvider>
+    </>
   );
+
+  if (convex) {
+    return <ConvexProvider client={convex}>{content}</ConvexProvider>;
+  }
+
+  // If Convex is not configured yet, render without provider
+  return content;
 }
