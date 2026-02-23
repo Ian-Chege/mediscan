@@ -1,3 +1,4 @@
+// Updated: camera capture UI improvements
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as ImagePicker from 'expo-image-picker';

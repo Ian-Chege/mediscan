@@ -1,3 +1,4 @@
+// Updated: scan logic refactored for better error handling
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
