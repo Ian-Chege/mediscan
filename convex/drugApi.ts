@@ -12,50 +12,40 @@ export const checkInteractions = action({
   },
   handler: async (_ctx, { medications, existingMedications }) => {
     const allMeds = [...medications, ...existingMedications];
-    const interactions: Array<{
-      drug1: string;
-      drug2: string;
-      severity: string;
-      description: string;
-    }> = [];
 
+    // Build all pairs and check them in parallel
+    const pairs: [string, string][] = [];
     for (let i = 0; i < allMeds.length; i++) {
       for (let j = i + 1; j < allMeds.length; j++) {
-        const drug1 = allMeds[i];
-        const drug2 = allMeds[j];
+        pairs.push([allMeds[i], allMeds[j]]);
+      }
+    }
 
+    const results = await Promise.all(
+      pairs.map(async ([drug1, drug2]) => {
         try {
           const response = await fetch(
             `${FDA_API_BASE}/label.json?search=drug_interactions:"${encodeURIComponent(drug1)}"+"${encodeURIComponent(drug2)}"&limit=1`,
           );
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data.results && data.results.length > 0) {
-              const interactionText =
-                data.results[0].drug_interactions?.[0] || "";
-
-              if (interactionText.toLowerCase().includes(drug2.toLowerCase())) {
-                interactions.push({
-                  drug1,
-                  drug2,
-                  severity: determineSeverity(interactionText),
-                  description: extractRelevantText(
-                    interactionText,
-                    drug1,
-                    drug2,
-                  ),
-                });
-              }
-            }
-          }
+          if (!response.ok) return null;
+          const data = await response.json();
+          if (!data.results?.length) return null;
+          const interactionText = data.results[0].drug_interactions?.[0] || "";
+          if (!interactionText.toLowerCase().includes(drug2.toLowerCase())) return null;
+          return {
+            drug1,
+            drug2,
+            severity: determineSeverity(interactionText),
+            description: extractRelevantText(interactionText, drug1, drug2),
+          };
         } catch (error) {
           console.error(`Error checking ${drug1} + ${drug2}:`, error);
+          return null;
         }
-      }
-    }
+      }),
+    );
 
-    return interactions;
+    return results.filter(Boolean) as Array<{ drug1: string; drug2: string; severity: string; description: string }>;
   },
 });
 

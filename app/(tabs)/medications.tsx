@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -14,6 +14,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { MedicationCard } from '@/components/MedicationCard';
 import { EmptyState } from '@/components/EmptyState';
 import { Colors } from '@/constants/Colors';
+import { useTheme, AppColors } from '@/hooks/useTheme';
 
 // Convex hooks — imported conditionally once Convex is configured
 let useMutation: any, useQuery: any, api: any;
@@ -29,6 +30,8 @@ try {
 const DEMO_USER_ID = null;
 
 export default function MedicationsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [showAll, setShowAll] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newMed, setNewMed] = useState({
@@ -161,7 +164,7 @@ export default function MedicationsScreen() {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add Medication</Text>
             <Pressable onPress={() => setShowAddModal(false)}>
-              <FontAwesome name="times" size={24} color={Colors.textSecondary} />
+              <FontAwesome name="times" size={24} color={colors.textSecondary} />
             </Pressable>
           </View>
 
@@ -175,7 +178,7 @@ export default function MedicationsScreen() {
                   setNewMed((prev) => ({ ...prev, name: text }))
                 }
                 placeholder="e.g., Amoxicillin"
-                placeholderTextColor={Colors.textSecondary}
+                placeholderTextColor={colors.textSecondary}
               />
             </View>
 
@@ -188,7 +191,7 @@ export default function MedicationsScreen() {
                   setNewMed((prev) => ({ ...prev, dosage: text }))
                 }
                 placeholder="e.g., 500mg"
-                placeholderTextColor={Colors.textSecondary}
+                placeholderTextColor={colors.textSecondary}
               />
             </View>
 
@@ -201,7 +204,7 @@ export default function MedicationsScreen() {
                   setNewMed((prev) => ({ ...prev, frequency: text }))
                 }
                 placeholder="e.g., 3 times daily"
-                placeholderTextColor={Colors.textSecondary}
+                placeholderTextColor={colors.textSecondary}
               />
             </View>
 
@@ -214,7 +217,7 @@ export default function MedicationsScreen() {
                   setNewMed((prev) => ({ ...prev, purpose: text }))
                 }
                 placeholder="e.g., For blood pressure"
-                placeholderTextColor={Colors.textSecondary}
+                placeholderTextColor={colors.textSecondary}
               />
             </View>
 
@@ -227,7 +230,7 @@ export default function MedicationsScreen() {
                   setNewMed((prev) => ({ ...prev, instructions: text }))
                 }
                 placeholder="e.g., Take with food"
-                placeholderTextColor={Colors.textSecondary}
+                placeholderTextColor={colors.textSecondary}
               />
             </View>
 
@@ -241,106 +244,108 @@ export default function MedicationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  filterButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  filterButtonActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  filterText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: Colors.textSecondary,
-  },
-  filterTextActive: {
-    color: '#FFFFFF',
-  },
-  list: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  form: {
-    padding: 20,
-    gap: 16,
-  },
-  inputGroup: {
-    gap: 4,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  input: {
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: Colors.text,
-  },
-  saveButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    filterRow: {
+      flexDirection: 'row',
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      gap: 8,
+    },
+    filterButton: {
+      paddingHorizontal: 20,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    filterButtonActive: {
+      backgroundColor: Colors.primary,
+      borderColor: Colors.primary,
+    },
+    filterText: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textSecondary,
+    },
+    filterTextActive: {
+      color: '#FFFFFF',
+    },
+    list: {
+      paddingHorizontal: 20,
+      paddingBottom: 100,
+    },
+    fab: {
+      position: 'absolute',
+      bottom: 24,
+      right: 24,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: Colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalContainer: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    form: {
+      padding: 20,
+      gap: 16,
+    },
+    inputGroup: {
+      gap: 4,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      color: colors.text,
+    },
+    saveButton: {
+      backgroundColor: Colors.primary,
+      borderRadius: 8,
+      padding: 16,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    saveButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+  });
+}

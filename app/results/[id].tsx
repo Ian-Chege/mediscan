@@ -15,6 +15,7 @@ import { InteractionWarning } from '@/components/InteractionWarning';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import Markdown from 'react-native-markdown-display';
 import { Colors } from '@/constants/Colors';
+import { useTheme, AppColors } from '@/hooks/useTheme';
 import { formatDateTime } from '@/lib/utils';
 
 // Convex hooks — imported conditionally once Convex is configured
@@ -31,6 +32,9 @@ try {
 const DEMO_USER_ID = null;
 
 export default function ScanResultsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const markdownStyles = useMemo(() => createMarkdownStyles(colors), [colors]);
   const { id, data } = useLocalSearchParams<{ id: string; data?: string }>();
 
   // If id is "local", data was passed via route params (no Convex user yet)
@@ -167,7 +171,7 @@ export default function ScanResultsScreen() {
           <FontAwesome
             name="info-circle"
             size={16}
-            color={Colors.textSecondary}
+            color={colors.textSecondary}
           />
           <Text style={styles.disclaimerText}>
             This information is for reference only and does not replace
@@ -180,139 +184,145 @@ export default function ScanResultsScreen() {
   );
 }
 
-const markdownStyles = StyleSheet.create({
-  body: {
-    fontSize: 14,
-    color: Colors.text,
-    lineHeight: 22,
-  },
-  heading1: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: Colors.text,
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  heading2: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: Colors.text,
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  heading3: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: Colors.text,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  strong: {
-    fontWeight: '700' as const,
-    color: Colors.text,
-  },
-  bullet_list: {
-    marginVertical: 4,
-  },
-  ordered_list: {
-    marginVertical: 4,
-  },
-  list_item: {
-    flexDirection: 'row' as const,
-    marginVertical: 2,
-  },
-  bullet_list_icon: {
-    fontSize: 14,
-    color: Colors.primary,
-    marginRight: 8,
-  },
-  paragraph: {
-    marginVertical: 4,
-  },
-});
+function createMarkdownStyles(colors: AppColors) {
+  return StyleSheet.create({
+    body: {
+      fontSize: 14,
+      color: colors.text,
+      lineHeight: 22,
+    },
+    heading1: {
+      fontSize: 18,
+      fontWeight: '700' as const,
+      color: colors.text,
+      marginTop: 12,
+      marginBottom: 6,
+    },
+    heading2: {
+      fontSize: 16,
+      fontWeight: '700' as const,
+      color: colors.text,
+      marginTop: 10,
+      marginBottom: 4,
+    },
+    heading3: {
+      fontSize: 15,
+      fontWeight: '600' as const,
+      color: colors.text,
+      marginTop: 8,
+      marginBottom: 4,
+    },
+    strong: {
+      fontWeight: '700' as const,
+      color: colors.text,
+    },
+    bullet_list: {
+      marginVertical: 4,
+    },
+    ordered_list: {
+      marginVertical: 4,
+    },
+    list_item: {
+      flexDirection: 'row' as const,
+      marginVertical: 2,
+    },
+    bullet_list_icon: {
+      fontSize: 14,
+      color: Colors.primary,
+      marginRight: 8,
+    },
+    paragraph: {
+      marginVertical: 4,
+    },
+  });
+}
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  date: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 12,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: -4,
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.secondary,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  addButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  explanationCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  explanationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  explanationTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  disclaimerCard: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: '#F1F5F9',
-    borderRadius: 8,
-    padding: 12,
-  },
-  disclaimerText: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 18,
-    flex: 1,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-  },
-  errorText: {
-    fontSize: 18,
-    color: Colors.textSecondary,
-  },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      padding: 20,
+      paddingBottom: 40,
+    },
+    date: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      marginBottom: 16,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 12,
+    },
+    cardActions: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: -4,
+      marginBottom: 16,
+      paddingHorizontal: 4,
+    },
+    addButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: Colors.secondary,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 6,
+    },
+    addButtonText: {
+      color: '#FFFFFF',
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    explanationCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+      marginTop: 8,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    explanationHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 12,
+    },
+    explanationTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    disclaimerCard: {
+      flexDirection: 'row',
+      gap: 8,
+      backgroundColor: colors.card,
+      borderRadius: 8,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    disclaimerText: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 18,
+      flex: 1,
+    },
+    errorContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 12,
+    },
+    errorText: {
+      fontSize: 18,
+      color: colors.textSecondary,
+    },
+  });
+}

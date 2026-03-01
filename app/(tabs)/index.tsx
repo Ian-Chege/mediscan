@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -17,6 +17,7 @@ import { CameraCapture } from '@/components/CameraCapture';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/EmptyState';
 import { Colors } from '@/constants/Colors';
+import { useTheme, AppColors } from '@/hooks/useTheme';
 import { formatDateTime } from '@/lib/utils';
 
 // Convex hooks — imported conditionally once Convex is configured
@@ -34,14 +35,13 @@ try {
 const DEMO_USER_ID = null;
 
 export default function ScanScreen() {
+  const { colors, isDark, toggleTheme } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
   const [prescriptionText, setPrescriptionText] = useState('');
 
-  const extractMedications = api && useAction ? useAction(api.ai.extractMedications) : null;
-  const extractFromText = api && useAction ? useAction(api.ai.extractFromText) : null;
-  const checkInteractions = api && useAction ? useAction(api.drugApi.checkInteractions) : null;
-  const generateExplanation = api && useAction ? useAction(api.ai.generateExplanation) : null;
+  const processScan = api && useAction ? useAction(api.ai.processScan) : null;
   const saveScan = api && useMutation ? useMutation(api.scans.save) : null;
   const scans = api && useQuery
     ? (DEMO_USER_ID ? useQuery(api.scans.list, { userId: DEMO_USER_ID as any }) : undefined)
@@ -50,86 +50,58 @@ export default function ScanScreen() {
     ? (DEMO_USER_ID ? useQuery(api.medications.listActive, { userId: DEMO_USER_ID as any }) : undefined)
     : undefined;
 
-  // Shared logic: take extracted meds → check interactions → get explanation → navigate
-  const processExtracted = useCallback(
-    async (extracted: any) => {
-      if (extracted.error) {
-        Alert.alert('Error', extracted.error);
+  // Navigate to results after a single processScan call
+  const handleResult = useCallback(
+    async (result: any) => {
+      if (result.error) {
+        Alert.alert('Error', result.error);
         return;
       }
-
-      if (!extracted.medications || extracted.medications.length === 0) {
-        Alert.alert(
-          'No Medications Found',
-          'Could not identify any medications. Try again with more detail.',
-        );
+      if (!result.medications || result.medications.length === 0) {
+        Alert.alert('No Medications Found', 'Could not identify any medications. Try again with more detail.');
         return;
       }
-
-      // Check interactions
-      setProcessingStep('Checking for interactions...');
-      const newMedNames = extracted.medications.map((m: any) => m.name);
-      const existingMedNames = (activeMeds ?? []).map((m: any) => m.name);
-      const interactions = await checkInteractions({
-        medications: newMedNames,
-        existingMedications: existingMedNames,
-      });
-
-      // Generate explanation
-      setProcessingStep('Preparing explanation...');
-      const explanation = await generateExplanation({
-        medications: extracted.medications.map((m: any) => ({
-          name: m.name,
-          dosage: m.dosage,
-          frequency: m.frequency,
-        })),
-        interactions,
-      });
-
-      // Save and navigate
       if (DEMO_USER_ID && saveScan) {
-        setProcessingStep('Saving results...');
         const scanId = await saveScan({
           userId: DEMO_USER_ID as any,
-          extractedMedications: extracted.medications,
-          interactions,
-          explanation: explanation ?? 'No explanation available.',
+          extractedMedications: result.medications,
+          interactions: result.interactions,
+          explanation: result.explanation ?? 'No explanation available.',
         });
         router.push(`/results/${scanId}`);
       } else {
-        // No Convex user yet — navigate to results with data in params
         router.push({
           pathname: '/results/[id]',
           params: {
             id: 'local',
             data: JSON.stringify({
-              extractedMedications: extracted.medications,
-              interactions,
-              explanation: explanation ?? 'No explanation available.',
+              extractedMedications: result.medications,
+              interactions: result.interactions,
+              explanation: result.explanation ?? 'No explanation available.',
               scannedAt: Date.now(),
             }),
           },
         });
       }
     },
-    [checkInteractions, generateExplanation, saveScan, activeMeds],
+    [saveScan],
   );
 
-  // Handle image scan
+  // Handle image scan — single round trip
   const handleImageCaptured = useCallback(
     async (base64: string) => {
-      if (!extractMedications) {
-        Alert.alert(
-          'Setup Required',
-          'Connect Convex and set your OpenAI API key to enable scanning.',
-        );
+      if (!processScan) {
+        Alert.alert('Setup Required', 'Connect Convex and set your OpenAI API key to enable scanning.');
         return;
       }
       setIsProcessing(true);
+      setProcessingStep('Analyzing prescription...');
       try {
-        setProcessingStep('Reading prescription...');
-        const extracted = await extractMedications({ imageBase64: base64 });
-        await processExtracted(extracted);
+        const result = await processScan({
+          imageBase64: base64,
+          existingMedications: (activeMeds ?? []).map((m: any) => m.name),
+        });
+        await handleResult(result);
       } catch (error) {
         console.error('Scan error:', error);
         Alert.alert('Scan Failed', 'Something went wrong. Please try again.');
@@ -138,30 +110,29 @@ export default function ScanScreen() {
         setProcessingStep('');
       }
     },
-    [extractMedications, processExtracted],
+    [processScan, activeMeds, handleResult],
   );
 
-  // Handle text lookup
+  // Handle text lookup — single round trip
   const handleTextLookup = useCallback(async () => {
     const text = prescriptionText.trim();
     if (!text) {
       Alert.alert('Enter a Prescription', 'Type a medication, e.g. "Bruffen 1x3"');
       return;
     }
-    if (!extractFromText) {
-      Alert.alert(
-        'Setup Required',
-        'Connect Convex and set your OpenAI API key to enable lookups.',
-      );
+    if (!processScan) {
+      Alert.alert('Setup Required', 'Connect Convex and set your OpenAI API key to enable lookups.');
       return;
     }
-
     Keyboard.dismiss();
     setIsProcessing(true);
+    setProcessingStep('Analyzing prescription...');
     try {
-      setProcessingStep('Analyzing prescription...');
-      const extracted = await extractFromText({ prescriptionText: text });
-      await processExtracted(extracted);
+      const result = await processScan({
+        prescriptionText: text,
+        existingMedications: (activeMeds ?? []).map((m: any) => m.name),
+      });
+      await handleResult(result);
       setPrescriptionText('');
     } catch (error) {
       console.error('Lookup error:', error);
@@ -170,7 +141,7 @@ export default function ScanScreen() {
       setIsProcessing(false);
       setProcessingStep('');
     }
-  }, [prescriptionText, extractFromText, processExtracted]);
+  }, [prescriptionText, processScan, activeMeds, handleResult]);
 
   if (isProcessing) {
     return <LoadingSpinner message={processingStep} />;
@@ -182,6 +153,14 @@ export default function ScanScreen() {
         <View style={styles.header}>
           <FontAwesome name="plus-square" size={28} color={Colors.primary} />
           <Text style={styles.headerTitle}>MediScan</Text>
+          <View style={{ flex: 1 }} />
+          <Pressable onPress={toggleTheme} style={styles.themeToggle} hitSlop={8}>
+            <FontAwesome
+              name={isDark ? 'sun-o' : 'moon-o'}
+              size={22}
+              color={colors.textSecondary}
+            />
+          </Pressable>
         </View>
 
         {/* Text input for quick prescription lookup */}
@@ -193,7 +172,7 @@ export default function ScanScreen() {
               value={prescriptionText}
               onChangeText={setPrescriptionText}
               placeholder='e.g. "Bruffen 1x3" or "Amoxicillin 500mg twice daily"'
-              placeholderTextColor={Colors.textSecondary}
+              placeholderTextColor={colors.textSecondary}
               returnKeyType="search"
               onSubmitEditing={handleTextLookup}
             />
@@ -269,122 +248,127 @@ export default function ScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollContent: {
-    paddingBottom: 24,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.text,
-  },
-  textInputSection: {
-    paddingHorizontal: 20,
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 10,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: Colors.text,
-  },
-  lookupButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    width: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  lookupButtonDisabled: {
-    opacity: 0.4,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginVertical: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  hint: {
-    textAlign: 'center',
-    color: Colors.textSecondary,
-    fontSize: 14,
-    paddingHorizontal: 40,
-  },
-  recentSection: {
-    marginTop: 24,
-    paddingHorizontal: 20,
-  },
-  scanCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginRight: 12,
-    width: 140,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    gap: 6,
-  },
-  scanCardMeds: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-    textAlign: 'center',
-  },
-  scanCardDate: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
-  warningDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-  },
-  disclaimer: {
-    textAlign: 'center',
-    color: Colors.textSecondary,
-    fontSize: 11,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-    fontStyle: 'italic',
-  },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      paddingBottom: 24,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 8,
+    },
+    headerTitle: {
+      fontSize: 24,
+      fontWeight: '800',
+      color: colors.text,
+    },
+    themeToggle: {
+      padding: 4,
+    },
+    textInputSection: {
+      paddingHorizontal: 20,
+      marginTop: 8,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 10,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    input: {
+      flex: 1,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      fontSize: 15,
+      color: colors.text,
+    },
+    lookupButton: {
+      backgroundColor: Colors.primary,
+      borderRadius: 10,
+      width: 48,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    lookupButtonDisabled: {
+      opacity: 0.4,
+    },
+    divider: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      marginVertical: 16,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    dividerText: {
+      marginHorizontal: 12,
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+    hint: {
+      textAlign: 'center',
+      color: colors.textSecondary,
+      fontSize: 14,
+      paddingHorizontal: 40,
+    },
+    recentSection: {
+      marginTop: 24,
+      paddingHorizontal: 20,
+    },
+    scanCard: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+      marginRight: 12,
+      width: 140,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      gap: 6,
+    },
+    scanCardMeds: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+      textAlign: 'center',
+    },
+    scanCardDate: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
+    warningDot: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+    },
+    disclaimer: {
+      textAlign: 'center',
+      color: colors.textSecondary,
+      fontSize: 11,
+      paddingHorizontal: 20,
+      paddingTop: 16,
+      paddingBottom: 8,
+      fontStyle: 'italic',
+    },
+  });
+}

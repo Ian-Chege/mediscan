@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -14,6 +14,7 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { ReminderItem } from '@/components/ReminderItem';
 import { EmptyState } from '@/components/EmptyState';
 import { Colors } from '@/constants/Colors';
+import { useTheme, AppColors } from '@/hooks/useTheme';
 // TODO: Re-enable when using a development build instead of Expo Go
 // import { scheduleMedicationReminder, cancelReminder } from '@/lib/notifications';
 import { parseTime } from '@/lib/utils';
@@ -43,6 +44,8 @@ const DAYS_OPTIONS = [
 ];
 
 export default function RemindersScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedTime, setSelectedTime] = useState('08:00');
   const [selectedDays, setSelectedDays] = useState<string[]>(['daily']);
@@ -187,7 +190,7 @@ export default function RemindersScreen() {
               <FontAwesome
                 name="times"
                 size={24}
-                color={Colors.textSecondary}
+                color={colors.textSecondary}
               />
             </Pressable>
           </View>
@@ -234,7 +237,7 @@ export default function RemindersScreen() {
                 value={selectedTime}
                 onChangeText={setSelectedTime}
                 placeholder="08:00"
-                placeholderTextColor={Colors.textSecondary}
+                placeholderTextColor={colors.textSecondary}
                 keyboardType="numbers-and-punctuation"
               />
             </View>
@@ -276,135 +279,137 @@ export default function RemindersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  list: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  form: {
-    padding: 20,
-    gap: 20,
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  input: {
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: Colors.text,
-  },
-  noMedsText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontStyle: 'italic',
-  },
-  medOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  medOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  medOptionActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  medOptionText: {
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: '500',
-  },
-  medOptionTextActive: {
-    color: '#FFFFFF',
-  },
-  daysRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  dayChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: Colors.card,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  dayChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  dayChipText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  dayChipTextActive: {
-    color: '#FFFFFF',
-  },
-  saveButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-    padding: 16,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    list: {
+      padding: 20,
+      paddingBottom: 100,
+    },
+    fab: {
+      position: 'absolute',
+      bottom: 24,
+      right: 24,
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: Colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalContainer: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    form: {
+      padding: 20,
+      gap: 20,
+    },
+    inputGroup: {
+      gap: 8,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      color: colors.text,
+    },
+    noMedsText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      fontStyle: 'italic',
+    },
+    medOptions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    medOption: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    medOptionActive: {
+      backgroundColor: Colors.primary,
+      borderColor: Colors.primary,
+    },
+    medOptionText: {
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: '500',
+    },
+    medOptionTextActive: {
+      color: '#FFFFFF',
+    },
+    daysRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    dayChip: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    dayChipActive: {
+      backgroundColor: Colors.primary,
+      borderColor: Colors.primary,
+    },
+    dayChipText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    dayChipTextActive: {
+      color: '#FFFFFF',
+    },
+    saveButton: {
+      backgroundColor: Colors.primary,
+      borderRadius: 8,
+      padding: 16,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    saveButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+  });
+}

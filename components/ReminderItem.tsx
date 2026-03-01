@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Colors } from '@/constants/Colors';
+import { useTheme, AppColors } from '@/hooks/useTheme';
 import { parseTime, formatTime } from '@/lib/utils';
 
 interface ReminderItemProps {
@@ -22,6 +24,8 @@ export function ReminderItem({
   onToggle,
   onDelete,
 }: ReminderItemProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { hour, minute } = parseTime(time);
   const displayTime = formatTime(hour, minute);
   const displayDays =
@@ -43,7 +47,7 @@ export function ReminderItem({
         <Switch
           value={isActive}
           onValueChange={onToggle}
-          trackColor={{ false: Colors.border, true: Colors.secondary }}
+          trackColor={{ false: colors.border, true: Colors.secondary }}
           thumbColor="#FFFFFF"
         />
         <Pressable onPress={onDelete} hitSlop={8}>
@@ -54,50 +58,52 @@ export function ReminderItem({
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  containerInactive: {
-    opacity: 0.5,
-  },
-  timeSection: {
-    marginRight: 16,
-    minWidth: 80,
-  },
-  time: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  days: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  medSection: {
-    flex: 1,
-  },
-  medName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text,
-  },
-  medDosage: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-});
+function createStyles(colors: AppColors) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    containerInactive: {
+      opacity: 0.5,
+    },
+    timeSection: {
+      marginRight: 16,
+      minWidth: 80,
+    },
+    time: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: Colors.primary,
+    },
+    days: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    medSection: {
+      flex: 1,
+    },
+    medName: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    medDosage: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    actions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+  });
+}

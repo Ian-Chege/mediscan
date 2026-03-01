@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { StatusBar } from 'expo-status-bar';
+import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -42,13 +43,18 @@ export default function RootLayout() {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <ThemeProvider>
+      <RootLayoutNav />
+    </ThemeProvider>
+  );
 }
 
 function RootLayoutNav() {
+  const { isDark } = useTheme();
   const content = (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
