@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Colors, Shadows } from '@/constants/Colors';
+import { useTheme, AppColors } from '@/hooks/useTheme';
+import type { AppShadows } from '@/constants/Colors';
 import { parseTime, formatTime } from '@/lib/utils';
 
 interface ReminderItemProps {
@@ -22,6 +24,9 @@ export function ReminderItem({
   onToggle,
   onDelete,
 }: ReminderItemProps) {
+  const { colors, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
+
   const { hour, minute } = parseTime(time);
   const displayTime = formatTime(hour, minute);
   const displayDays =
@@ -50,8 +55,8 @@ export function ReminderItem({
         <Switch
           value={isActive}
           onValueChange={onToggle}
-          trackColor={{ false: Colors.border, true: Colors.primaryLight }}
-          thumbColor={Colors.surface}
+          trackColor={{ false: colors.border, true: colors.primaryLight }}
+          thumbColor={colors.surface}
           accessibilityRole="switch"
           accessibilityLabel={`${isActive ? 'Disable' : 'Enable'} reminder for ${medicationName}`}
         />
@@ -62,76 +67,78 @@ export function ReminderItem({
           accessibilityRole="button"
           accessibilityLabel={`Delete reminder for ${medicationName}`}
         >
-          <FontAwesome name="trash-o" size={16} color={Colors.danger} />
+          <FontAwesome name="trash-o" size={16} color={colors.danger} />
         </Pressable>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    ...Shadows.sm,
-  },
-  containerInactive: {
-    opacity: 0.55,
-  },
-  timeBlock: {
-    minWidth: 76,
-  },
-  time: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.primary,
-    letterSpacing: -0.5,
-  },
-  timeInactive: {
-    color: Colors.textTertiary,
-  },
-  days: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  divider: {
-    width: 1,
-    height: 36,
-    backgroundColor: Colors.border,
-    marginHorizontal: 14,
-  },
-  medSection: {
-    flex: 1,
-  },
-  medName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.text,
-    letterSpacing: -0.2,
-  },
-  medNameInactive: {
-    color: Colors.textTertiary,
-  },
-  medDosage: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  deleteButton: {
-    padding: 4,
-  },
-  deleteButtonPressed: {
-    opacity: 0.5,
-  },
-});
+function createStyles(colors: AppColors, shadows: AppShadows) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 12,
+      ...shadows.sm,
+    },
+    containerInactive: {
+      opacity: 0.55,
+    },
+    timeBlock: {
+      minWidth: 76,
+    },
+    time: {
+      fontSize: 20,
+      fontWeight: '800',
+      color: colors.primary,
+      letterSpacing: -0.5,
+    },
+    timeInactive: {
+      color: colors.textTertiary,
+    },
+    days: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginTop: 2,
+      fontWeight: '500',
+    },
+    divider: {
+      width: 1,
+      height: 36,
+      backgroundColor: colors.border,
+      marginHorizontal: 14,
+    },
+    medSection: {
+      flex: 1,
+    },
+    medName: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+      letterSpacing: -0.2,
+    },
+    medNameInactive: {
+      color: colors.textTertiary,
+    },
+    medDosage: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    actions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    deleteButton: {
+      padding: 4,
+    },
+    deleteButtonPressed: {
+      opacity: 0.5,
+    },
+  });
+}

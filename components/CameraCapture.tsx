@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import * as ImagePicker from 'expo-image-picker';
-import { Colors, Shadows } from '@/constants/Colors';
+import { useTheme, AppColors } from '@/hooks/useTheme';
+import type { AppShadows } from '@/constants/Colors';
 
 interface CameraCaptureProps {
   onImageCaptured: (base64: string) => void;
@@ -9,6 +11,9 @@ interface CameraCaptureProps {
 }
 
 export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps) {
+  const { colors, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
+
   const pickImage = async (useCamera: boolean) => {
     try {
       if (useCamera) {
@@ -48,7 +53,6 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
       <Pressable
         style={({ pressed }) => [
           styles.card,
-          styles.cameraCard,
           disabled && styles.cardDisabled,
           pressed && styles.cardPressed,
         ]}
@@ -58,7 +62,7 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
         accessibilityLabel="Take a photo of your prescription"
       >
         <View style={styles.iconCircle}>
-          <FontAwesome name="camera" size={22} color={Colors.primary} />
+          <FontAwesome name="camera" size={22} color={colors.primary} />
         </View>
         <Text style={styles.cardTitle}>Camera</Text>
         <Text style={styles.cardSubtitle}>Take a photo</Text>
@@ -67,7 +71,6 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
       <Pressable
         style={({ pressed }) => [
           styles.card,
-          styles.galleryCard,
           disabled && styles.cardDisabled,
           pressed && styles.cardPressed,
         ]}
@@ -77,7 +80,7 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
         accessibilityLabel="Select a prescription image from gallery"
       >
         <View style={[styles.iconCircle, styles.iconCircleAccent]}>
-          <FontAwesome name="image" size={22} color={Colors.accent} />
+          <FontAwesome name="image" size={22} color={colors.accent} />
         </View>
         <Text style={styles.cardTitle}>Gallery</Text>
         <Text style={styles.cardSubtitle}>Choose image</Text>
@@ -86,51 +89,51 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingHorizontal: 20,
-  },
-  card: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 24,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: Colors.card,
-    ...Shadows.md,
-  },
-  cameraCard: {},
-  galleryCard: {},
-  cardDisabled: {
-    opacity: 0.5,
-  },
-  cardPressed: {
-    backgroundColor: Colors.surfaceHover,
-    transform: [{ scale: 0.97 }],
-  },
-  iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primarySoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  iconCircleAccent: {
-    backgroundColor: Colors.accentSoft,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text,
-    letterSpacing: -0.3,
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 2,
-  },
-});
+function createStyles(colors: AppColors, shadows: AppShadows) {
+  return StyleSheet.create({
+    container: {
+      flexDirection: 'row',
+      gap: 12,
+      paddingHorizontal: 20,
+    },
+    card: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 24,
+      paddingHorizontal: 16,
+      borderRadius: 16,
+      backgroundColor: colors.card,
+      ...shadows.md,
+    },
+    cardDisabled: {
+      opacity: 0.5,
+    },
+    cardPressed: {
+      backgroundColor: colors.surfaceHover,
+      transform: [{ scale: 0.97 }],
+    },
+    iconCircle: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: colors.primarySoft,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    iconCircleAccent: {
+      backgroundColor: colors.accentSoft,
+    },
+    cardTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      letterSpacing: -0.3,
+    },
+    cardSubtitle: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+  });
+}

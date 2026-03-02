@@ -1,7 +1,6 @@
 import { Link, Stack } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Colors } from '@/constants/Colors';
 import { useTheme, AppColors } from '@/hooks/useTheme';
 
 export default function NotFoundScreen() {
@@ -40,7 +39,7 @@ function createStyles(colors: AppColors) {
     },
     linkText: {
       fontSize: 14,
-      color: Colors.primary,
+      color: colors.primary,
     },
   });
 }

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -16,7 +16,8 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { CameraCapture } from '@/components/CameraCapture';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { EmptyState } from '@/components/EmptyState';
-import { Colors, Shadows } from '@/constants/Colors';
+import { useTheme, AppColors } from '@/hooks/useTheme';
+import type { AppShadows } from '@/constants/Colors';
 import { formatDateTime } from '@/lib/utils';
 import { useUser } from '@/contexts/UserContext';
 
@@ -34,6 +35,8 @@ try {
 
 export default function ScanScreen() {
   const userId = useUser();
+  const { colors, shadows, isDark, toggleTheme } = useTheme();
+  const styles = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
   const [prescriptionText, setPrescriptionText] = useState('');
@@ -185,8 +188,22 @@ export default function ScanScreen() {
             <Text style={styles.greeting}>Welcome to</Text>
             <Text style={styles.brand}>MediScan</Text>
           </View>
-          <View style={styles.brandIcon}>
-            <FontAwesome name="plus-square" size={20} color={Colors.primary} />
+          <View style={styles.headerActions}>
+            <Pressable
+              onPress={toggleTheme}
+              style={styles.themeToggle}
+              accessibilityRole="button"
+              accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              <FontAwesome
+                name={isDark ? 'sun-o' : 'moon-o'}
+                size={18}
+                color={colors.primary}
+              />
+            </Pressable>
+            <View style={styles.brandIcon}>
+              <FontAwesome name="plus-square" size={20} color={colors.primary} />
+            </View>
           </View>
         </View>
 
@@ -204,13 +221,13 @@ export default function ScanScreen() {
         {/* Text input */}
         <View style={styles.inputWrapper}>
           <View style={styles.inputContainer}>
-            <FontAwesome name="pencil" size={14} color={Colors.textTertiary} style={styles.inputIcon} />
+            <FontAwesome name="pencil" size={14} color={colors.textTertiary} style={styles.inputIcon} />
             <TextInput
               style={styles.input}
               value={prescriptionText}
               onChangeText={setPrescriptionText}
               placeholder='e.g. "Bruffen 1x3" or "Amoxicillin 500mg"'
-              placeholderTextColor={Colors.textTertiary}
+              placeholderTextColor={colors.textTertiary}
               returnKeyType="search"
               onSubmitEditing={handleTextLookup}
               accessibilityLabel="Type a prescription"
@@ -227,7 +244,7 @@ export default function ScanScreen() {
             accessibilityRole="button"
             accessibilityLabel="Search prescription"
           >
-            <FontAwesome name="arrow-right" size={16} color={Colors.textInverse} />
+            <FontAwesome name="arrow-right" size={16} color={colors.textInverse} />
           </Pressable>
         </View>
 
@@ -237,7 +254,7 @@ export default function ScanScreen() {
           {!scans || scans.length === 0 ? (
             <View style={styles.recentEmpty}>
               <View style={styles.recentEmptyIcon}>
-                <FontAwesome name="file-text-o" size={20} color={Colors.textTertiary} />
+                <FontAwesome name="file-text-o" size={20} color={colors.textTertiary} />
               </View>
               <Text style={styles.recentEmptyText}>
                 Your scan history will appear here
@@ -258,9 +275,9 @@ export default function ScanScreen() {
                   accessibilityLabel={`View scan with ${item.extractedMedications.length} medications`}
                 >
                   <View style={styles.scanCardHeader}>
-                    <FontAwesome name="file-text" size={16} color={Colors.primary} />
+                    <FontAwesome name="file-text" size={16} color={colors.primary} />
                     {item.interactions.length > 0 && (
-                      <FontAwesome name="exclamation-circle" size={12} color={Colors.danger} />
+                      <FontAwesome name="exclamation-circle" size={12} color={colors.danger} />
                     )}
                   </View>
                   <Text style={styles.scanCardMeds}>
@@ -284,166 +301,181 @@ export default function ScanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollContent: {
-    paddingBottom: 32,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 24,
-  },
-  greeting: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  brand: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.text,
-    letterSpacing: -0.8,
-  },
-  brandIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: Colors.primarySoft,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sectionLabel: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    paddingHorizontal: 20,
-    marginBottom: 12,
-    letterSpacing: -0.2,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginVertical: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    marginHorizontal: 14,
-    fontSize: 13,
-    color: Colors.textTertiary,
-    fontWeight: '500',
-  },
-  inputWrapper: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 20,
-  },
-  inputContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.card,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    ...Shadows.sm,
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    paddingVertical: 14,
-    fontSize: 15,
-    color: Colors.text,
-  },
-  searchButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.md,
-  },
-  searchButtonDisabled: {
-    backgroundColor: Colors.textTertiary,
-    ...Shadows.sm,
-  },
-  searchButtonPressed: {
-    backgroundColor: Colors.primaryDark,
-    transform: [{ scale: 0.95 }],
-  },
-  recentSection: {
-    marginTop: 28,
-  },
-  recentEmpty: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 20,
-    backgroundColor: Colors.card,
-    padding: 20,
-    borderRadius: 16,
-    ...Shadows.sm,
-  },
-  recentEmptyIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  recentEmptyText: {
-    fontSize: 14,
-    color: Colors.textTertiary,
-    flex: 1,
-  },
-  scanCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 14,
-    padding: 14,
-    marginLeft: 20,
-    width: 120,
-    gap: 6,
-    ...Shadows.sm,
-  },
-  scanCardPressed: {
-    backgroundColor: Colors.surfaceHover,
-    transform: [{ scale: 0.97 }],
-  },
-  scanCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  scanCardMeds: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text,
-    letterSpacing: -0.3,
-  },
-  scanCardDate: {
-    fontSize: 11,
-    color: Colors.textTertiary,
-  },
-  disclaimer: {
-    textAlign: 'center',
-    color: Colors.textTertiary,
-    fontSize: 11,
-    paddingHorizontal: 40,
-    paddingTop: 24,
-    paddingBottom: 8,
-  },
-});
+function createStyles(colors: AppColors, shadows: AppShadows) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scrollContent: {
+      paddingBottom: 32,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingTop: 8,
+      paddingBottom: 24,
+    },
+    greeting: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    brand: {
+      fontSize: 28,
+      fontWeight: '800',
+      color: colors.text,
+      letterSpacing: -0.8,
+    },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    themeToggle: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: colors.surfaceHover,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    brandIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: colors.primarySoft,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    sectionLabel: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      paddingHorizontal: 20,
+      marginBottom: 12,
+      letterSpacing: -0.2,
+    },
+    divider: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      marginVertical: 20,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    dividerText: {
+      marginHorizontal: 14,
+      fontSize: 13,
+      color: colors.textTertiary,
+      fontWeight: '500',
+    },
+    inputWrapper: {
+      flexDirection: 'row',
+      gap: 10,
+      paddingHorizontal: 20,
+    },
+    inputContainer: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      ...shadows.sm,
+    },
+    inputIcon: {
+      marginRight: 10,
+    },
+    input: {
+      flex: 1,
+      paddingVertical: 14,
+      fontSize: 15,
+      color: colors.text,
+    },
+    searchButton: {
+      width: 50,
+      height: 50,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      ...shadows.md,
+    },
+    searchButtonDisabled: {
+      backgroundColor: colors.textTertiary,
+      ...shadows.sm,
+    },
+    searchButtonPressed: {
+      backgroundColor: colors.primaryDark,
+      transform: [{ scale: 0.95 }],
+    },
+    recentSection: {
+      marginTop: 28,
+    },
+    recentEmpty: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginHorizontal: 20,
+      backgroundColor: colors.card,
+      padding: 20,
+      borderRadius: 16,
+      ...shadows.sm,
+    },
+    recentEmptyIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: colors.background,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    recentEmptyText: {
+      fontSize: 14,
+      color: colors.textTertiary,
+      flex: 1,
+    },
+    scanCard: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 14,
+      marginLeft: 20,
+      width: 120,
+      gap: 6,
+      ...shadows.sm,
+    },
+    scanCardPressed: {
+      backgroundColor: colors.surfaceHover,
+      transform: [{ scale: 0.97 }],
+    },
+    scanCardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    scanCardMeds: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+      letterSpacing: -0.3,
+    },
+    scanCardDate: {
+      fontSize: 11,
+      color: colors.textTertiary,
+    },
+    disclaimer: {
+      textAlign: 'center',
+      color: colors.textTertiary,
+      fontSize: 11,
+      paddingHorizontal: 40,
+      paddingTop: 24,
+      paddingBottom: 8,
+    },
+  });
+}

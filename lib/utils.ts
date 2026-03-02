@@ -41,18 +41,27 @@ export function formatTime(hour: number, minute: number): string {
 }
 
 /**
- * Get a severity color for drug interactions
+ * Get a severity color for drug interactions.
+ * Optionally accepts a colors object with themed severity tokens.
  */
-export function getSeverityColor(severity: string): string {
+export function getSeverityColor(
+  severity: string,
+  colors?: { severityHigh: string; severityModerate: string; severityLow: string; severityDefault: string },
+): string {
+  const high = colors?.severityHigh ?? '#FF6B6B';
+  const moderate = colors?.severityModerate ?? '#FFB347';
+  const low = colors?.severityLow ?? '#6BCB77';
+  const fallback = colors?.severityDefault ?? '#6B7280';
+
   switch (severity) {
     case 'high':
-      return '#FF6B6B';
+      return high;
     case 'moderate':
-      return '#FFB347';
+      return moderate;
     case 'low':
-      return '#6BCB77';
+      return low;
     default:
-      return '#6B7280';
+      return fallback;
   }
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -14,7 +14,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { ReminderItem } from '@/components/ReminderItem';
 import { EmptyState } from '@/components/EmptyState';
-import { Colors, Shadows } from '@/constants/Colors';
+import { useTheme, AppColors } from '@/hooks/useTheme';
+import type { AppShadows } from '@/constants/Colors';
 import { useUser } from '@/contexts/UserContext';
 // TODO: Re-enable when using a development build instead of Expo Go
 // import { scheduleMedicationReminder, cancelReminder } from '@/lib/notifications';
@@ -44,6 +45,8 @@ const DAYS_OPTIONS = [
 
 export default function RemindersScreen() {
   const userId = useUser();
+  const { colors, shadows } = useTheme();
+  const styles = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedTime, setSelectedTime] = useState('08:00');
   const [selectedDays, setSelectedDays] = useState<string[]>(['daily']);
@@ -183,7 +186,7 @@ export default function RemindersScreen() {
         accessibilityRole="button"
         accessibilityLabel="Add reminder"
       >
-        <FontAwesome name="plus" size={22} color={Colors.textInverse} />
+        <FontAwesome name="plus" size={22} color={colors.textInverse} />
       </Pressable>
 
       {/* Add Reminder Modal */}
@@ -202,7 +205,7 @@ export default function RemindersScreen() {
               accessibilityRole="button"
               accessibilityLabel="Close"
             >
-              <FontAwesome name="times" size={22} color={Colors.textSecondary} />
+              <FontAwesome name="times" size={22} color={colors.textSecondary} />
             </Pressable>
           </View>
 
@@ -212,7 +215,7 @@ export default function RemindersScreen() {
               <Text style={styles.label}>Medication</Text>
               {!medications || medications.length === 0 ? (
                 <View style={styles.noMedsCard}>
-                  <FontAwesome name="info-circle" size={14} color={Colors.textTertiary} />
+                  <FontAwesome name="info-circle" size={14} color={colors.textTertiary} />
                   <Text style={styles.noMedsText}>
                     No active medications. Add one in the My Meds tab first.
                   </Text>
@@ -256,7 +259,7 @@ export default function RemindersScreen() {
                 value={selectedTime}
                 onChangeText={setSelectedTime}
                 placeholder="08:00"
-                placeholderTextColor={Colors.textTertiary}
+                placeholderTextColor={colors.textTertiary}
                 keyboardType="numbers-and-punctuation"
                 accessibilityLabel="Reminder time"
               />
@@ -314,167 +317,169 @@ export default function RemindersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.text,
-    letterSpacing: -0.8,
-  },
-  list: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
-    width: 58,
-    height: 58,
-    borderRadius: 18,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.lg,
-  },
-  fabPressed: {
-    backgroundColor: Colors.primaryDark,
-    transform: [{ scale: 0.93 }],
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.borderLight,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text,
-    letterSpacing: -0.3,
-  },
-  form: {
-    padding: 20,
-  },
-  inputGroup: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  input: {
-    backgroundColor: Colors.card,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 16,
-    color: Colors.text,
-  },
-  noMedsCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.card,
-    padding: 16,
-    borderRadius: 12,
-  },
-  noMedsText: {
-    fontSize: 14,
-    color: Colors.textTertiary,
-    flex: 1,
-  },
-  medOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  medOption: {
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: Colors.card,
-    ...Shadows.sm,
-  },
-  medOptionActive: {
-    backgroundColor: Colors.primary,
-  },
-  medOptionPressed: {
-    transform: [{ scale: 0.96 }],
-  },
-  medOptionText: {
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  medOptionTextActive: {
-    color: Colors.textInverse,
-  },
-  daysRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  dayChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    backgroundColor: Colors.card,
-    ...Shadows.sm,
-  },
-  dayChipActive: {
-    backgroundColor: Colors.primary,
-  },
-  dayChipPressed: {
-    transform: [{ scale: 0.95 }],
-  },
-  dayChipText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  dayChipTextActive: {
-    color: Colors.textInverse,
-  },
-  saveButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 14,
-    padding: 18,
-    alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 40,
-    ...Shadows.md,
-  },
-  saveButtonDisabled: {
-    backgroundColor: Colors.textTertiary,
-  },
-  saveButtonPressed: {
-    backgroundColor: Colors.primaryDark,
-    transform: [{ scale: 0.98 }],
-  },
-  saveButtonText: {
-    color: Colors.textInverse,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: -0.2,
-  },
-});
+function createStyles(colors: AppColors, shadows: AppShadows) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      paddingHorizontal: 20,
+      paddingTop: 8,
+      paddingBottom: 12,
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: '800',
+      color: colors.text,
+      letterSpacing: -0.8,
+    },
+    list: {
+      padding: 20,
+      paddingBottom: 100,
+    },
+    fab: {
+      position: 'absolute',
+      bottom: 24,
+      right: 24,
+      width: 58,
+      height: 58,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+      ...shadows.lg,
+    },
+    fabPressed: {
+      backgroundColor: colors.primaryDark,
+      transform: [{ scale: 0.93 }],
+    },
+    modalContainer: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 18,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.borderLight,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.text,
+      letterSpacing: -0.3,
+    },
+    form: {
+      padding: 20,
+    },
+    inputGroup: {
+      marginBottom: 24,
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      marginBottom: 10,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    input: {
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      padding: 14,
+      fontSize: 16,
+      color: colors.text,
+    },
+    noMedsCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: colors.card,
+      padding: 16,
+      borderRadius: 12,
+    },
+    noMedsText: {
+      fontSize: 14,
+      color: colors.textTertiary,
+      flex: 1,
+    },
+    medOptions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    medOption: {
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+      borderRadius: 12,
+      backgroundColor: colors.card,
+      ...shadows.sm,
+    },
+    medOptionActive: {
+      backgroundColor: colors.primary,
+    },
+    medOptionPressed: {
+      transform: [{ scale: 0.96 }],
+    },
+    medOptionText: {
+      fontSize: 14,
+      color: colors.text,
+      fontWeight: '600',
+    },
+    medOptionTextActive: {
+      color: colors.textInverse,
+    },
+    daysRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    dayChip: {
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 24,
+      backgroundColor: colors.card,
+      ...shadows.sm,
+    },
+    dayChipActive: {
+      backgroundColor: colors.primary,
+    },
+    dayChipPressed: {
+      transform: [{ scale: 0.95 }],
+    },
+    dayChipText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '600',
+    },
+    dayChipTextActive: {
+      color: colors.textInverse,
+    },
+    saveButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 14,
+      padding: 18,
+      alignItems: 'center',
+      marginTop: 8,
+      marginBottom: 40,
+      ...shadows.md,
+    },
+    saveButtonDisabled: {
+      backgroundColor: colors.textTertiary,
+    },
+    saveButtonPressed: {
+      backgroundColor: colors.primaryDark,
+      transform: [{ scale: 0.98 }],
+    },
+    saveButtonText: {
+      color: colors.textInverse,
+      fontSize: 16,
+      fontWeight: '700',
+      letterSpacing: -0.2,
+    },
+  });
+}

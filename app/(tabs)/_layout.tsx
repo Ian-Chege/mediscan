@@ -1,7 +1,7 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
-import { Colors } from '@/constants/Colors';
+import { useTheme } from '@/hooks/useTheme';
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
@@ -11,11 +11,13 @@ function TabBarIcon(props: {
 }
 
 export default function TabLayout() {
+  const { colors, isDark } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textTertiary,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textTertiary,
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
@@ -23,17 +25,17 @@ export default function TabLayout() {
         },
         tabBarStyle: {
           borderTopWidth: 0,
-          backgroundColor: Colors.surface,
+          backgroundColor: colors.surface,
           elevation: 0,
-          shadowColor: '#1C1917',
+          shadowColor: '#000000',
           shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.04,
+          shadowOpacity: isDark ? 0.15 : 0.04,
           shadowRadius: 8,
           paddingTop: 4,
           height: 56,
         },
         headerStyle: {
-          backgroundColor: Colors.background,
+          backgroundColor: colors.background,
           elevation: 0,
           shadowOpacity: 0,
           borderBottomWidth: 0,
@@ -41,7 +43,7 @@ export default function TabLayout() {
         headerTitleStyle: {
           fontWeight: '800',
           fontSize: 17,
-          color: Colors.text,
+          color: colors.text,
           letterSpacing: -0.3,
         },
       }}

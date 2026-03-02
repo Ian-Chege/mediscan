@@ -5,7 +5,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { StatusBar } from 'expo-status-bar';
-import { Colors } from '@/constants/Colors';
+import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { UserProvider } from '@/contexts/UserContext';
 
 export { ErrorBoundary } from 'expo-router';
@@ -44,13 +44,19 @@ export default function RootLayout() {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <ThemeProvider>
+      <RootLayoutNav />
+    </ThemeProvider>
+  );
 }
 
 function RootLayoutNav() {
+  const { colors, isDark } = useTheme();
+
   const content = (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
@@ -59,14 +65,14 @@ function RootLayoutNav() {
             title: 'Scan Results',
             headerBackTitle: 'Back',
             headerStyle: {
-              backgroundColor: Colors.background,
+              backgroundColor: colors.background,
             },
             headerTitleStyle: {
               fontWeight: '700',
               fontSize: 17,
-              color: Colors.text,
+              color: colors.text,
             },
-            headerTintColor: Colors.primary,
+            headerTintColor: colors.primary,
             headerShadowVisible: false,
           }}
         />
