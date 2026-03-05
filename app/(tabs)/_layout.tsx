@@ -2,17 +2,14 @@ import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs } from 'expo-router';
 import { useTheme } from '@/hooks/useTheme';
-
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
   color: string;
 }) {
   return <FontAwesome size={22} style={{ marginBottom: -2 }} {...props} />;
 }
-
 export default function TabLayout() {
   const { colors, isDark } = useTheme();
-
   return (
     <Tabs
       screenOptions={{
@@ -70,6 +67,14 @@ export default function TabLayout() {
           title: 'Reminders',
           headerShown: false,
           tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="todos"
+        options={{
+          title: 'To-Do',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <TabBarIcon name="check-square" color={color} />,
         }}
       />
     </Tabs>

@@ -1,13 +1,11 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-
 export default defineSchema({
   users: defineTable({
     name: v.optional(v.string()),
     pushToken: v.optional(v.string()),
     createdAt: v.number(),
   }),
-
   medications: defineTable({
     userId: v.id("users"),
     name: v.string(),
@@ -22,7 +20,6 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_active", ["userId", "isActive"]),
-
   reminders: defineTable({
     userId: v.id("users"),
     medicationId: v.id("medications"),
@@ -34,7 +31,6 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_medication", ["medicationId"]),
-
   scans: defineTable({
     userId: v.id("users"),
     imageStorageId: v.optional(v.id("_storage")),
@@ -56,5 +52,12 @@ export default defineSchema({
     ),
     explanation: v.string(),
     scannedAt: v.number(),
+  }).index("by_user", ["userId"]),
+  todos: defineTable({
+    userId: v.id("users"),
+    task: v.string(),
+    medicationName: v.optional(v.string()),
+    completed: v.boolean(),
+    createdAt: v.number(),
   }).index("by_user", ["userId"]),
 });
