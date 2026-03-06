@@ -28,8 +28,9 @@ export default function TabLayout() {
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: isDark ? 0.15 : 0.04,
           shadowRadius: 8,
-          paddingTop: 4,
-          height: 56,
+          paddingTop: 6,
+          paddingBottom: 16,
+          height: 72,
         },
         headerStyle: {
           backgroundColor: colors.background,
@@ -59,6 +60,14 @@ export default function TabLayout() {
           title: 'My Meds',
           headerShown: false,
           tabBarIcon: ({ color }) => <TabBarIcon name="medkit" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="schedule"
+        options={{
+          title: 'Schedule',
+          headerShown: false,
+          tabBarIcon: ({ color }) => <TabBarIcon name="calendar" color={color} />,
         }}
       />
       <Tabs.Screen

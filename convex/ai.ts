@@ -242,6 +242,57 @@ If the input doesn't look like a medication, return: { "medications": [], "error
   },
 });
 
+export const suggestForCondition = action({
+  args: {
+    condition: v.string(),
+  },
+  handler: async (_ctx, { condition }) => {
+    const openai = getOpenAI();
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are a knowledgeable pharmacist assistant. A patient will describe their condition or symptoms. Suggest commonly used medications for that condition.
+
+IMPORTANT RULES:
+- Suggest 2-5 medications that are commonly used for this condition
+- Include both brand name and generic name where applicable
+- Include standard adult dosages and typical frequency
+- Focus on commonly available, well-known medications (OTC first, then common prescription)
+- Set confidence to "medium" for all suggestions (since these are general recommendations, not a prescription)
+- DO NOT suggest controlled substances or high-risk medications
+- Always include a note reminding the patient to consult a doctor
+
+Return ONLY valid JSON in this exact format:
+{
+  "medications": [
+    {
+      "name": "Ibuprofen (Advil/Brufen)",
+      "dosage": "400mg",
+      "frequency": "every 6-8 hours as needed",
+      "confidence": "medium"
+    }
+  ],
+  "notes": "These are common suggestions for [condition]. Always consult your doctor before taking any medication."
+}
+
+If the input doesn't describe a medical condition, return: { "medications": [], "error": "Please describe a medical condition or symptoms" }`,
+        },
+        {
+          role: "user",
+          content: `Suggest medications for this condition: ${condition}`,
+        },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 1000,
+    });
+
+    const result = JSON.parse(response.choices[0].message.content!);
+    return result;
+  },
+});
+
 export const generateExplanation = action({
   args: {
     medications: v.array(
@@ -259,35 +310,78 @@ export const generateExplanation = action({
         description: v.string(),
       }),
     ),
+    condition: v.optional(v.string()),
+    conditionData: v.optional(
+      v.array(
+        v.object({
+          drug: v.string(),
+          indications: v.union(v.string(), v.null()),
+          warnings: v.union(v.string(), v.null()),
+        }),
+      ),
+    ),
   },
-  handler: async (_ctx, { medications, interactions }) => {
+  handler: async (_ctx, { medications, interactions, condition, conditionData }) => {
     const openai = getOpenAI();
+
+    let conditionSection = "";
+    if (condition && conditionData) {
+      conditionSection = `
+
+PATIENT'S CONDITION: ${condition}
+
+FDA INDICATION DATA FOR EACH MEDICATION:
+${conditionData.map((d) => `- ${d.drug}: ${d.indications || "No FDA indication data available"}`).join("\n")}
+
+IMPORTANT: Based on the patient's stated condition and the FDA indication data above:
+1. For each medication, state whether it is commonly used to treat "${condition}"
+2. If a medication does NOT seem appropriate for this condition, clearly flag it as a concern
+3. If a medication has warnings relevant to this condition, mention them
+4. Add a section titled "## Condition Safety Check" with your assessment`;
+    }
+
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: `You are a friendly pharmacist assistant. Explain medications in simple, everyday language.
+          content: `You are a friendly pharmacist assistant. Explain medications in very simple, everyday language.
 
-Guidelines:
-- Use simple words, avoid medical jargon
-- Explain what each medication is typically used for
-- Include practical tips (take with food, avoid alcohol, etc.)
-- If there are interactions, explain the risk clearly but don't cause panic
-- Be encouraging and supportive
-- Keep it concise but informative
-- Use bullet points for clarity
+Return ONLY valid JSON with this exact structure:
+{
+  "en": "English markdown explanation here",
+  "sw": "Swahili markdown explanation here",
+  "conditionMatches": [
+    { "drug": "DrugName", "match": "yes|no|partial", "reason_en": "Short reason in English", "reason_sw": "Short reason in Swahili" }
+  ]
+}
 
-Format your response as a helpful summary the patient can easily understand.`,
+RULES for conditionMatches:
+- ONLY include this array if a patient condition is provided
+- If no condition is given, set conditionMatches to an empty array []
+- "yes" = this drug is commonly used to treat the stated condition
+- "no" = this drug is NOT appropriate for the stated condition
+- "partial" = it may help with some symptoms but is not the primary treatment
+- Keep reasons to ONE short sentence
+
+Guidelines for en/sw explanations:
+- Use very simple, short sentences a patient can understand
+- For each medication: what it does (1 sentence), how to take it (1 sentence), one key tip
+- If there are interactions, add a simple warning
+- NO nested bullet points — keep it flat and scannable
+- Use **bold** for medication names and key warnings only
+- Max 3-4 bullet points per medication
+- Be warm and reassuring
+- The Swahili version should be a natural translation, not word-for-word`,
         },
         {
           role: "user",
-          content: `Please explain these medications and any interactions:
+          content: `Explain simply for a patient:
 
 MEDICATIONS:
 ${medications.map((m) => `- ${m.name} (${m.dosage}, ${m.frequency})`).join("\n")}
 
-INTERACTIONS FOUND:
+INTERACTIONS:
 ${
   interactions.length > 0
     ? interactions
@@ -296,15 +390,16 @@ ${
             `- ${i.drug1} + ${i.drug2}: ${i.description} (${i.severity} severity)`,
         )
         .join("\n")
-    : "No significant interactions found"
-}
-
-Provide a clear, friendly explanation.`,
+    : "None found"
+}${conditionSection}`,
         },
       ],
-      max_tokens: 1000,
+      response_format: { type: "json_object" },
+      max_tokens: 1500,
     });
 
-    return response.choices[0].message.content;
+    const parsed = JSON.parse(response.choices[0].message.content!);
+    // Store as JSON string so frontend can parse both languages + condition matches
+    return JSON.stringify({ en: parsed.en, sw: parsed.sw, conditionMatches: parsed.conditionMatches || [] });
   },
 });

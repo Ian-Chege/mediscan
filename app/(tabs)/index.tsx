@@ -19,7 +19,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { useTheme, AppColors } from '@/hooks/useTheme';
 import type { AppShadows } from '@/constants/Colors';
 import { formatDateTime } from '@/lib/utils';
-import { useUser } from '@/contexts/UserContext';
+import { useUser, useUserRole } from '@/contexts/UserContext';
 
 // Convex hooks — imported conditionally once Convex is configured
 let useAction: any, useMutation: any, useQuery: any, api: any;
@@ -35,15 +35,19 @@ try {
 
 export default function ScanScreen() {
   const userId = useUser();
+  const role = useUserRole();
   const { colors, shadows, isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
   const [prescriptionText, setPrescriptionText] = useState('');
+  const [conditionText, setConditionText] = useState('');
 
   const extractMedications = api && useAction ? useAction(api.ai.extractMedications) : null;
   const extractFromText = api && useAction ? useAction(api.ai.extractFromText) : null;
+  const suggestForCondition = api && useAction ? useAction(api.ai.suggestForCondition) : null;
   const checkInteractions = api && useAction ? useAction(api.drugApi.checkInteractions) : null;
+  const checkConditionSafety = api && useAction ? useAction(api.drugApi.checkConditionSafety) : null;
   const generateExplanation = api && useAction ? useAction(api.ai.generateExplanation) : null;
   const saveScan = api && useMutation ? useMutation(api.scans.save) : null;
   const scans = api && useQuery
@@ -78,29 +82,50 @@ export default function ScanScreen() {
         existingMedications: existingMedNames,
       });
 
+      // Check condition safety if user provided a condition
+      const condition = conditionText.trim();
+      let conditionData = null;
+      if (condition && checkConditionSafety) {
+        setProcessingStep('Checking medication safety for your condition...');
+        conditionData = await checkConditionSafety({
+          medications: newMedNames,
+          condition,
+        });
+      }
+
       // Generate explanation
       setProcessingStep('Preparing explanation...');
-      const explanation = await generateExplanation({
+      const explanationArgs: any = {
         medications: extracted.medications.map((m: any) => ({
           name: m.name,
           dosage: m.dosage,
           frequency: m.frequency,
         })),
         interactions,
-      });
+      };
+      if (condition) {
+        explanationArgs.condition = condition;
+      }
+      if (conditionData) {
+        explanationArgs.conditionData = conditionData;
+      }
+      const explanation = await generateExplanation(explanationArgs);
 
       // Save and navigate
       if (userId && saveScan) {
         setProcessingStep('Saving results...');
-        const scanId = await saveScan({
+        const saveArgs: any = {
           userId: userId as any,
           extractedMedications: extracted.medications,
           interactions,
           explanation: explanation ?? 'No explanation available.',
-        });
+        };
+        if (condition) {
+          saveArgs.condition = condition;
+        }
+        const scanId = await saveScan(saveArgs);
         router.push(`/results/${scanId}`);
       } else {
-        // No Convex user yet — navigate to results with data in params
         router.push({
           pathname: '/results/[id]',
           params: {
@@ -109,13 +134,15 @@ export default function ScanScreen() {
               extractedMedications: extracted.medications,
               interactions,
               explanation: explanation ?? 'No explanation available.',
+              condition: condition || undefined,
               scannedAt: Date.now(),
             }),
           },
         });
       }
+      setConditionText('');
     },
-    [userId, checkInteractions, generateExplanation, saveScan, activeMeds],
+    [userId, checkInteractions, checkConditionSafety, generateExplanation, saveScan, activeMeds, conditionText],
   );
 
   // Handle image scan
@@ -175,20 +202,64 @@ export default function ScanScreen() {
     }
   }, [prescriptionText, extractFromText, processExtracted]);
 
+  // Handle condition-based drug suggestion
+  const handleConditionSuggest = useCallback(async () => {
+    const condition = conditionText.trim();
+    if (!condition) {
+      Alert.alert('Enter a Condition', 'Describe what you are suffering from.');
+      return;
+    }
+    if (!suggestForCondition) {
+      Alert.alert(
+        'Setup Required',
+        'Connect Convex and set your OpenAI API key to enable suggestions.',
+      );
+      return;
+    }
+
+    Keyboard.dismiss();
+    setIsProcessing(true);
+    try {
+      setProcessingStep('Finding medications for your condition...');
+      const extracted = await suggestForCondition({ condition });
+      await processExtracted(extracted);
+    } catch (error) {
+      console.error('Suggestion error:', error);
+      Alert.alert('Suggestion Failed', 'Something went wrong. Please try again.');
+    } finally {
+      setIsProcessing(false);
+      setProcessingStep('');
+    }
+  }, [conditionText, suggestForCondition, processExtracted]);
+
   if (isProcessing) {
     return <LoadingSpinner message={processingStep} />;
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
         {/* Header */}
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Welcome to</Text>
-            <Text style={styles.brand}>MediScan</Text>
+            <Text style={styles.brand}>DrugScan</Text>
           </View>
           <View style={styles.headerActions}>
+            {role === 'admin' && (
+              <Pressable
+                onPress={() => router.push('/admin')}
+                style={styles.themeToggle}
+                accessibilityRole="button"
+                accessibilityLabel="Admin panel"
+              >
+                <FontAwesome name="shield" size={18} color={colors.accent} />
+              </Pressable>
+            )}
             <Pressable
               onPress={toggleTheme}
               style={styles.themeToggle}
@@ -210,6 +281,47 @@ export default function ScanScreen() {
         {/* Scan options — camera & gallery side by side */}
         <Text style={styles.sectionLabel}>Scan a Prescription</Text>
         <CameraCapture onImageCaptured={handleImageCaptured} />
+
+        {/* Condition input */}
+        <View style={styles.conditionSection}>
+          <Text style={styles.conditionLabel}>What are you suffering from?</Text>
+          <View style={styles.conditionInputRow}>
+            <View style={styles.conditionInputContainer}>
+              <FontAwesome name="heartbeat" size={14} color={colors.textTertiary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.conditionInput}
+                value={conditionText}
+                onChangeText={setConditionText}
+                placeholder='e.g. "Headache", "Flu", "Chest pain"'
+                placeholderTextColor={colors.textTertiary}
+                returnKeyType="search"
+                onSubmitEditing={handleConditionSuggest}
+                accessibilityLabel="Enter your condition or disease"
+              />
+              {conditionText.length > 0 && (
+                <Pressable onPress={() => setConditionText('')} hitSlop={8}>
+                  <FontAwesome name="times-circle" size={16} color={colors.textTertiary} />
+                </Pressable>
+              )}
+            </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.suggestButton,
+                !conditionText.trim() && styles.suggestButtonDisabled,
+                pressed && conditionText.trim() && styles.suggestButtonPressed,
+              ]}
+              onPress={handleConditionSuggest}
+              disabled={!conditionText.trim()}
+              accessibilityRole="button"
+              accessibilityLabel="Get drug suggestions"
+            >
+              <FontAwesome name="search" size={16} color={colors.textInverse} />
+            </Pressable>
+          </View>
+          <Text style={styles.conditionHint}>
+            Get drug suggestions, or leave filled when scanning a prescription to check safety
+          </Text>
+        </View>
 
         {/* Divider */}
         <View style={styles.divider}>
@@ -357,6 +469,58 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       paddingHorizontal: 20,
       marginBottom: 12,
       letterSpacing: -0.2,
+    },
+    conditionSection: {
+      paddingHorizontal: 20,
+      marginTop: 20,
+    },
+    conditionLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    conditionInputRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    conditionInputContainer: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      ...shadows.sm,
+    },
+    conditionInput: {
+      flex: 1,
+      paddingVertical: 14,
+      fontSize: 15,
+      color: colors.text,
+    },
+    suggestButton: {
+      width: 50,
+      height: 50,
+      borderRadius: 14,
+      backgroundColor: colors.accent,
+      justifyContent: 'center',
+      alignItems: 'center',
+      ...shadows.md,
+    },
+    suggestButtonDisabled: {
+      backgroundColor: colors.textTertiary,
+      ...shadows.sm,
+    },
+    suggestButtonPressed: {
+      opacity: 0.85,
+      transform: [{ scale: 0.95 }],
+    },
+    conditionHint: {
+      fontSize: 12,
+      color: colors.textTertiary,
+      marginTop: 6,
+      paddingHorizontal: 4,
     },
     divider: {
       flexDirection: 'row',

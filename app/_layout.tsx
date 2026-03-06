@@ -2,11 +2,13 @@ import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { StatusBar } from 'expo-status-bar';
+import * as Notifications from 'expo-notifications';
 import { ThemeProvider, useTheme } from '@/hooks/useTheme';
 import { UserProvider } from '@/contexts/UserContext';
+import { registerForPushNotifications } from '@/lib/notifications';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -27,8 +29,30 @@ export default function RootLayout() {
     ...FontAwesome.font,
   });
 
-  // TODO: Re-enable when using a development build instead of Expo Go
-  // useNotifications();
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
+
+  useEffect(() => {
+    // Push tokens not needed — we only use local scheduled notifications
+    // registerForPushNotifications();
+
+    notificationListener.current = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        console.log('Notification received:', notification);
+      },
+    );
+
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(
+      (response) => {
+        console.log('Notification tapped:', response);
+      },
+    );
+
+    return () => {
+      notificationListener.current?.remove();
+      responseListener.current?.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (error) throw error;
@@ -59,6 +83,18 @@ function RootLayoutNav() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="admin/index" options={{ headerShown: false }} />
+        <Stack.Screen
+          name="admin/[userId]"
+          options={{
+            title: 'User Details',
+            headerStyle: { backgroundColor: colors.background },
+            headerTitleStyle: { fontWeight: '700', fontSize: 17, color: colors.text },
+            headerTintColor: colors.primary,
+            headerShadowVisible: false,
+            headerShown: false,
+          }}
+        />
         <Stack.Screen
           name="results/[id]"
           options={{

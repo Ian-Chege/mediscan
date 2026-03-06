@@ -22,6 +22,7 @@ export const get = query({
 export const save = mutation({
   args: {
     userId: v.id("users"),
+    condition: v.optional(v.string()),
     extractedMedications: v.array(
       v.object({
         name: v.string(),

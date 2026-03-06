@@ -8,11 +8,14 @@
  * @module
  */
 
+import type * as admin from "../admin.js";
 import type * as ai from "../ai.js";
 import type * as drugApi from "../drugApi.js";
 import type * as medications from "../medications.js";
 import type * as reminders from "../reminders.js";
 import type * as scans from "../scans.js";
+import type * as schedule from "../schedule.js";
+import type * as todos from "../todos.js";
 import type * as users from "../users.js";
 
 import type {
@@ -22,11 +25,14 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
   ai: typeof ai;
   drugApi: typeof drugApi;
   medications: typeof medications;
   reminders: typeof reminders;
   scans: typeof scans;
+  schedule: typeof schedule;
+  todos: typeof todos;
   users: typeof users;
 }>;
 

@@ -3,9 +3,10 @@ import { v } from "convex/values";
 export default defineSchema({
   users: defineTable({
     name: v.optional(v.string()),
+    role: v.optional(v.string()),
     pushToken: v.optional(v.string()),
     createdAt: v.number(),
-  }),
+  }).index("by_role", ["role"]),
   medications: defineTable({
     userId: v.id("users"),
     name: v.string(),
@@ -34,6 +35,7 @@ export default defineSchema({
   scans: defineTable({
     userId: v.id("users"),
     imageStorageId: v.optional(v.id("_storage")),
+    condition: v.optional(v.string()),
     extractedMedications: v.array(
       v.object({
         name: v.string(),
@@ -60,4 +62,15 @@ export default defineSchema({
     completed: v.boolean(),
     createdAt: v.number(),
   }).index("by_user", ["userId"]),
+  scheduleEntries: defineTable({
+    userId: v.id("users"),
+    medicationId: v.id("medications"),
+    reminderId: v.optional(v.id("reminders")),
+    date: v.string(),
+    time: v.string(),
+    taken: v.boolean(),
+    takenAt: v.optional(v.number()),
+  })
+    .index("by_user_date", ["userId", "date"])
+    .index("by_medication_date", ["medicationId", "date"]),
 });

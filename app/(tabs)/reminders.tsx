@@ -17,8 +17,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { useTheme, AppColors } from '@/hooks/useTheme';
 import type { AppShadows } from '@/constants/Colors';
 import { useUser } from '@/contexts/UserContext';
-// TODO: Re-enable when using a development build instead of Expo Go
-// import { scheduleMedicationReminder, cancelReminder } from '@/lib/notifications';
+import { scheduleMedicationReminder, cancelReminder } from '@/lib/notifications';
 import { parseTime } from '@/lib/utils';
 
 // Convex hooks — imported conditionally once Convex is configured
@@ -63,22 +62,26 @@ export default function RemindersScreen() {
   const removeReminder = api && useMutation ? useMutation(api.reminders.remove) : null;
 
   const handleToggle = useCallback(
-    async (id: any, _isActive: boolean, _notificationId?: string) => {
-      // TODO: cancel local notification when using dev build
+    async (id: any, isActive: boolean, notificationId?: string) => {
+      if (isActive && notificationId) {
+        await cancelReminder(notificationId);
+      }
       await toggleReminder?.({ id });
     },
     [toggleReminder],
   );
 
   const handleDelete = useCallback(
-    (id: any, name: string, _notificationId?: string) => {
+    (id: any, name: string, notificationId?: string) => {
       Alert.alert('Delete Reminder', `Remove reminder for ${name}?`, [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
-            // TODO: cancel local notification when using dev build
+            if (notificationId) {
+              await cancelReminder(notificationId);
+            }
             await removeReminder?.({ id });
           },
         },
@@ -104,14 +107,19 @@ export default function RemindersScreen() {
       const med = (medications ?? []).find((m: any) => m._id === selectedMedId);
       const { hour, minute } = parseTime(selectedTime);
 
-      // TODO: schedule local notification when using dev build
-      // const notificationId = await scheduleMedicationReminder(...)
+      const notificationId = await scheduleMedicationReminder(
+        med?.name ?? 'Medication',
+        med?.dosage ?? '',
+        hour,
+        minute,
+      );
 
       await addReminder({
         userId: userId as any,
         medicationId: selectedMedId as any,
         time: selectedTime,
         days: selectedDays,
+        notificationId,
       });
 
       setShowAddModal(false);

@@ -1,4 +1,4 @@
-# MediScan
+# DrugScan
 
 AI-powered prescription scanner — snap a photo or type a shorthand like `Bruffen 1x3`, and get extracted medication details, drug interaction checks, and plain-language explanations.
 
@@ -197,4 +197,4 @@ npm run web        # expo start --web
 
 ---
 
-> **Disclaimer:** MediScan is for informational purposes only — not a substitute for professional medical advice.
+> **Disclaimer:** DrugScan is for informational purposes only — not a substitute for professional medical advice.

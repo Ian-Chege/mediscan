@@ -81,3 +81,35 @@ function extractRelevantText(
   );
   return relevant?.trim().substring(0, 200) || text.substring(0, 200);
 }
+
+export const checkConditionSafety = action({
+  args: {
+    medications: v.array(v.string()),
+    condition: v.string(),
+  },
+  handler: async (_ctx, { medications, condition }) => {
+    const results = await Promise.all(
+      medications.map(async (drugName) => {
+        try {
+          const res = await fetch(
+            `${FDA_API_BASE}/label.json?search=openfda.brand_name:"${encodeURIComponent(drugName)}"+openfda.generic_name:"${encodeURIComponent(drugName)}"&limit=1`,
+          );
+          if (!res.ok) return { drug: drugName, indications: null, warnings: null };
+          const data = await res.json();
+          if (!data.results?.length) return { drug: drugName, indications: null, warnings: null };
+
+          const label = data.results[0];
+          return {
+            drug: drugName,
+            indications: label.indications_and_usage?.[0]?.substring(0, 500) || null,
+            warnings: label.warnings?.[0]?.substring(0, 300) || null,
+          };
+        } catch {
+          return { drug: drugName, indications: null, warnings: null };
+        }
+      }),
+    );
+
+    return results;
+  },
+});

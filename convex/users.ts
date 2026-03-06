@@ -6,10 +6,9 @@ export const getOrCreate = mutation({
     name: v.optional(v.string()),
   },
   handler: async (ctx, { name }) => {
-    // For MVP, create a new anonymous user
-    // In production, you'd check for existing user via auth
     const userId = await ctx.db.insert("users", {
       name: name ?? "Anonymous",
+      role: "patient",
       createdAt: Date.now(),
     });
     return userId;
@@ -30,5 +29,15 @@ export const updatePushToken = mutation({
   },
   handler: async (ctx, { id, pushToken }) => {
     await ctx.db.patch(id, { pushToken });
+  },
+});
+
+export const setRole = mutation({
+  args: {
+    id: v.id("users"),
+    role: v.string(),
+  },
+  handler: async (ctx, { id, role }) => {
+    await ctx.db.patch(id, { role });
   },
 });
