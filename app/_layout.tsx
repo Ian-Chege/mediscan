@@ -3,6 +3,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import { ConvexProvider, ConvexReactClient } from 'convex/react';
 import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
@@ -33,8 +34,7 @@ export default function RootLayout() {
   const responseListener = useRef<Notifications.Subscription | null>(null);
 
   useEffect(() => {
-    // Push tokens not needed — we only use local scheduled notifications
-    // registerForPushNotifications();
+    if (Platform.OS === 'web') return;
 
     notificationListener.current = Notifications.addNotificationReceivedListener(
       (notification) => {

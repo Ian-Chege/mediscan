@@ -1,10 +1,47 @@
-"use node";
-
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import OpenAI from "openai";
 
 const FDA_API_BASE = "https://api.fda.gov/drug";
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
+
+// Direct fetch helper — avoids the openai npm package which causes Windows
+// path bundling issues with Convex's esbuild (c:\ paths in ESM bundles).
+async function chatCompletion(
+  model: string,
+  messages: any[],
+  maxTokens: number,
+  jsonMode = true,
+): Promise<string> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  const body: any = { model, messages, max_tokens: maxTokens };
+  if (jsonMode) body.response_format = { type: "json_object" };
+
+  const res = await fetch(OPENAI_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OpenAI error ${res.status}: ${text}`);
+  }
+
+  const data: any = await res.json();
+  return data.choices[0].message.content as string;
+}
+
+// Vision variant — supports image_url message content
+async function chatCompletionVision(
+  model: string,
+  messages: any[],
+  maxTokens: number,
+): Promise<string> {
+  return chatCompletion(model, messages, maxTokens, true);
+}
 
 function determineSeverity(text: string): string {
   const t = text.toLowerCase();
@@ -45,55 +82,41 @@ export const processScan = action({
     existingMedications: v.array(v.string()),
   },
   handler: async (_ctx, { imageBase64, prescriptionText, existingMedications }) => {
-    const openai = getOpenAI();
-
-    // Step 1: Extract medications (image or text)
     let extracted: any;
     if (imageBase64) {
-      const res = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: `You are a medical prescription reader. Extract ALL medications from the image.
+      const content = await chatCompletionVision("gpt-4o", [
+        {
+          role: "system",
+          content: `You are a medical prescription reader. Extract ALL medications from the image.
 Return ONLY valid JSON: { "medications": [{ "name": "...", "dosage": "...", "frequency": "...", "confidence": "high|medium|low" }], "notes": "..." }
 If not a prescription: { "medications": [], "error": "Not a prescription" }`,
-          },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: "Extract all medications from this prescription:" },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "auto" } },
-            ],
-          },
-        ],
-        response_format: { type: "json_object" },
-        max_tokens: 800,
-      });
-      extracted = JSON.parse(res.choices[0].message.content!);
+        },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "Extract all medications from this prescription:" },
+            { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "auto" } },
+          ],
+        },
+      ], 800);
+      extracted = JSON.parse(content);
     } else {
-      const res = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `You are a prescription parser. Parse shorthand like "Bruffen 1x3" into structured medication data.
+      const content = await chatCompletion("gpt-4o-mini", [
+        {
+          role: "system",
+          content: `You are a prescription parser. Parse shorthand like "Bruffen 1x3" into structured medication data.
 Return ONLY valid JSON: { "medications": [{ "name": "...", "dosage": "...", "frequency": "...", "confidence": "high|medium|low" }], "notes": "..." }
 If not a medication: { "medications": [], "error": "Could not identify any medications" }`,
-          },
-          { role: "user", content: `Parse this prescription: ${prescriptionText}` },
-        ],
-        response_format: { type: "json_object" },
-        max_tokens: 800,
-      });
-      extracted = JSON.parse(res.choices[0].message.content!);
+        },
+        { role: "user", content: `Parse this prescription: ${prescriptionText}` },
+      ], 800);
+      extracted = JSON.parse(content);
     }
 
     if (extracted.error || !extracted.medications?.length) {
       return { ...extracted, interactions: [], explanation: null };
     }
 
-    // Step 2: Check all drug pairs in PARALLEL (not sequential)
     const allMeds = [...extracted.medications.map((m: any) => m.name), ...existingMedications];
     const pairs: [string, string][] = [];
     for (let i = 0; i < allMeds.length; i++) {
@@ -103,50 +126,35 @@ If not a medication: { "medications": [], "error": "Could not identify any medic
     }
     const interactions = (await Promise.all(pairs.map(([d1, d2]) => checkPair(d1, d2)))).filter(Boolean);
 
-    // Step 3: Generate explanation with gpt-4o-mini (fast, cost-effective)
-    const explanationRes = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `You are a friendly pharmacist. Explain medications in simple language with practical tips. Use bullet points. Be concise.`,
-        },
-        {
-          role: "user",
-          content: `Explain these medications:\n${extracted.medications.map((m: any) => `- ${m.name} (${m.dosage}, ${m.frequency})`).join("\n")}\n\nInteractions:\n${interactions.length > 0 ? interactions.map((i: any) => `- ${i.drug1} + ${i.drug2}: ${i.description} (${i.severity})`).join("\n") : "None found"}`,
-        },
-      ],
-      max_tokens: 800,
-    });
+    const explanationContent = await chatCompletion("gpt-4o-mini", [
+      {
+        role: "system",
+        content: `You are a friendly pharmacist. Explain medications in simple language with practical tips. Use bullet points. Be concise.`,
+      },
+      {
+        role: "user",
+        content: `Explain these medications:\n${extracted.medications.map((m: any) => `- ${m.name} (${m.dosage}, ${m.frequency})`).join("\n")}\n\nInteractions:\n${interactions.length > 0 ? interactions.map((i: any) => `- ${i.drug1} + ${i.drug2}: ${i.description} (${i.severity})`).join("\n") : "None found"}`,
+      },
+    ], 800, false);
 
     return {
       medications: extracted.medications,
       notes: extracted.notes,
       interactions,
-      explanation: explanationRes.choices[0].message.content,
+      explanation: explanationContent,
     };
   },
 });
-
-// Lazy init: Convex analyzes modules at deploy time, but process.env
-// is only populated at runtime inside handlers. Initializing here would
-// throw "Missing credentials" during static analysis.
-function getOpenAI() {
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-}
 
 export const extractMedications = action({
   args: {
     imageBase64: v.string(),
   },
   handler: async (_ctx, { imageBase64 }) => {
-    const openai = getOpenAI();
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: `You are a medical prescription reader assistant. Your job is to:
+    const content = await chatCompletionVision("gpt-4o", [
+      {
+        role: "system",
+        content: `You are a medical prescription reader assistant. Your job is to:
 1. Extract ALL medication names from the prescription image
 2. Identify dosage amounts (e.g., "500mg", "10ml")
 3. Identify frequency (e.g., "twice daily", "every 8 hours")
@@ -167,30 +175,16 @@ Return ONLY valid JSON in this exact format:
 
 If you cannot read something, make your best guess and mark confidence as "low".
 If the image is not a prescription, return: { "medications": [], "error": "Not a prescription" }`,
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: "Extract all medications from this prescription image:",
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:image/jpeg;base64,${imageBase64}`,
-                detail: "auto",
-              },
-            },
-          ],
-        },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 1000,
-    });
-
-    const result = JSON.parse(response.choices[0].message.content!);
-    return result;
+      },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Extract all medications from this prescription image:" },
+          { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "auto" } },
+        ],
+      },
+    ], 1000);
+    return JSON.parse(content);
   },
 });
 
@@ -199,13 +193,10 @@ export const extractFromText = action({
     prescriptionText: v.string(),
   },
   handler: async (_ctx, { prescriptionText }) => {
-    const openai = getOpenAI();
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: `You are a medical prescription parser and pharmacist assistant. Users will type shorthand prescriptions like "Bruffen 1x3" or "Amoxicillin 500mg twice daily".
+    const content = await chatCompletion("gpt-4o", [
+      {
+        role: "system",
+        content: `You are a medical prescription parser and pharmacist assistant. Users will type shorthand prescriptions like "Bruffen 1x3" or "Amoxicillin 500mg twice daily".
 
 Your job is to:
 1. Identify the medication (use the correct generic/brand name)
@@ -227,18 +218,13 @@ Return ONLY valid JSON in this exact format:
 }
 
 If the input doesn't look like a medication, return: { "medications": [], "error": "Could not identify any medications" }`,
-        },
-        {
-          role: "user",
-          content: `Parse this prescription: ${prescriptionText}`,
-        },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 1000,
-    });
-
-    const result = JSON.parse(response.choices[0].message.content!);
-    return result;
+      },
+      {
+        role: "user",
+        content: `Parse this prescription: ${prescriptionText}`,
+      },
+    ], 1000);
+    return JSON.parse(content);
   },
 });
 
@@ -247,13 +233,10 @@ export const suggestForCondition = action({
     condition: v.string(),
   },
   handler: async (_ctx, { condition }) => {
-    const openai = getOpenAI();
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `You are a knowledgeable pharmacist assistant. A patient will describe their condition or symptoms. Suggest commonly used medications for that condition.
+    const content = await chatCompletion("gpt-4o-mini", [
+      {
+        role: "system",
+        content: `You are a knowledgeable pharmacist assistant. A patient will describe their condition or symptoms. Suggest commonly used medications for that condition.
 
 IMPORTANT RULES:
 - Suggest 2-5 medications that are commonly used for this condition
@@ -278,18 +261,13 @@ Return ONLY valid JSON in this exact format:
 }
 
 If the input doesn't describe a medical condition, return: { "medications": [], "error": "Please describe a medical condition or symptoms" }`,
-        },
-        {
-          role: "user",
-          content: `Suggest medications for this condition: ${condition}`,
-        },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 1000,
-    });
-
-    const result = JSON.parse(response.choices[0].message.content!);
-    return result;
+      },
+      {
+        role: "user",
+        content: `Suggest medications for this condition: ${condition}`,
+      },
+    ], 1000);
+    return JSON.parse(content);
   },
 });
 
@@ -322,8 +300,6 @@ export const generateExplanation = action({
     ),
   },
   handler: async (_ctx, { medications, interactions, condition, conditionData }) => {
-    const openai = getOpenAI();
-
     let conditionSection = "";
     if (condition && conditionData) {
       conditionSection = `
@@ -340,12 +316,10 @@ IMPORTANT: Based on the patient's stated condition and the FDA indication data a
 4. Add a section titled "## Condition Safety Check" with your assessment`;
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `You are a friendly pharmacist assistant. Explain medications in very simple, everyday language.
+    const content = await chatCompletion("gpt-4o-mini", [
+      {
+        role: "system",
+        content: `You are a friendly pharmacist assistant. Explain medications in very simple, everyday language.
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -353,16 +327,48 @@ Return ONLY valid JSON with this exact structure:
   "sw": "Swahili markdown explanation here",
   "conditionMatches": [
     { "drug": "DrugName", "match": "yes|no|partial", "reason_en": "Short reason in English", "reason_sw": "Short reason in Swahili" }
+  ],
+  "medicationSafety": [
+    {
+      "index": 0,
+      "ageRestrictions": [
+        { "severity": "high|moderate|low", "text_en": "If you are [age group], do not take this — [reason]", "text_sw": "Swahili translation" }
+      ],
+      "allergyRestrictions": [
+        { "allergen": "allergen name or drug class", "text_en": "Do not take if you are allergic to [X]. [Cross-reactivity note]", "text_sw": "Swahili translation" }
+      ]
+    }
   ]
 }
 
-RULES for conditionMatches:
-- ONLY include this array if a patient condition is provided
-- If no condition is given, set conditionMatches to an empty array []
-- "yes" = this drug is commonly used to treat the stated condition
-- "no" = this drug is NOT appropriate for the stated condition
-- "partial" = it may help with some symptoms but is not the primary treatment
-- Keep reasons to ONE short sentence
+IMPORTANT: medicationSafety must have one entry per medication, in the SAME ORDER as the MEDICATIONS list. index 0 = first medication, index 1 = second, etc.
+
+RULES for ageRestrictions — check EVERY medication:
+- "high" = absolute contraindication for an age group:
+  - Aspirin: under 16 (Reye's syndrome)
+  - Tetracycline/doxycycline: under 8 (permanent tooth/bone damage)
+  - Codeine: under 12 (respiratory depression risk)
+  - Ibuprofen/NSAIDs: under 6 months
+  - Fluoroquinolones (ciprofloxacin): under 18 (cartilage damage)
+  - Metoclopramide: under 1 year
+- "moderate" = caution / dose adjustment:
+  - NSAIDs in elderly 65+ (GI bleeding, kidney risk)
+  - Benzodiazepines in elderly (fall risk, confusion)
+  - Metformin in elderly with declining kidney function
+  - ACE inhibitors: careful dosing in elderly
+- If NO known age restriction exists → set ageRestrictions to []
+
+RULES for allergyRestrictions — ALWAYS list ALL known allergens for EVERY medication. Be thorough:
+- List EVERY allergen class and cross-reactive agent, one entry each
+- Penicillins (amoxicillin, ampicillin, co-amoxiclav): list penicillin, then note ~10% cross-reactivity with cephalosporins
+- Cephalosporins: list cephalosporin class, note possible penicillin cross-reactivity
+- NSAIDs (ibuprofen, naproxen, diclofenac, aspirin, ketorolac): list NSAID/aspirin hypersensitivity as one entry, then aspirin-exacerbated respiratory disease (AERD) as another
+- Sulfonamides (sulfamethoxazole, trimethoprim-sulfamethoxazole): list sulfa
+- Statins: list statin class (rare myopathy/rhabdomyolysis risk in sensitive patients)
+- Macrolides (azithromycin, erythromycin): list macrolide class
+- ACE inhibitors: list ACE inhibitor class (angioedema risk)
+- Opioids (codeine, tramadol): list opioid class
+- If a medication truly has no notable allergy concerns → set allergyRestrictions to []
 
 Guidelines for en/sw explanations:
 - Use very simple, short sentences a patient can understand
@@ -373,10 +379,10 @@ Guidelines for en/sw explanations:
 - Max 3-4 bullet points per medication
 - Be warm and reassuring
 - The Swahili version should be a natural translation, not word-for-word`,
-        },
-        {
-          role: "user",
-          content: `Explain simply for a patient:
+      },
+      {
+        role: "user",
+        content: `Explain simply for a patient:
 
 MEDICATIONS:
 ${medications.map((m) => `- ${m.name} (${m.dosage}, ${m.frequency})`).join("\n")}
@@ -392,14 +398,15 @@ ${
         .join("\n")
     : "None found"
 }${conditionSection}`,
-        },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 1500,
-    });
+      },
+    ], 1500);
 
-    const parsed = JSON.parse(response.choices[0].message.content!);
-    // Store as JSON string so frontend can parse both languages + condition matches
-    return JSON.stringify({ en: parsed.en, sw: parsed.sw, conditionMatches: parsed.conditionMatches || [] });
+    const parsed = JSON.parse(content);
+    return JSON.stringify({
+      en: parsed.en,
+      sw: parsed.sw,
+      conditionMatches: parsed.conditionMatches || [],
+      medicationSafety: parsed.medicationSafety || [],
+    });
   },
 });

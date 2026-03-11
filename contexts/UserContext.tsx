@@ -21,22 +21,27 @@ export function useUserRole() {
 }
 
 export function UserProvider({ children }: { children: React.ReactNode }) {
-  const [userId, setUserId] = useState<string | null>(null);
+  // pendingId: candidate from storage, not yet verified
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  // verifiedId: confirmed to be a real users-table ID
+  const [verifiedId, setVerifiedId] = useState<string | null>(null);
   const getOrCreate = useMutation(api.users.getOrCreate);
-  const user = useQuery(api.users.get, userId ? { id: userId as any } : "skip");
 
+  // Only query once we have a pending candidate; undefined = still loading, null = not a user
+  const user = useQuery(api.users.safeGet, pendingId ? { id: pendingId } : 'skip');
+
+  // Step 1: load or create a candidate ID
   useEffect(() => {
     async function initUser() {
       try {
         const stored = await AsyncStorage.getItem(USER_STORAGE_KEY);
         if (stored) {
-          setUserId(stored);
-          return;
+          setPendingId(stored);
+        } else {
+          const id = await getOrCreate({});
+          await AsyncStorage.setItem(USER_STORAGE_KEY, id);
+          setPendingId(id);
         }
-
-        const id = await getOrCreate({});
-        await AsyncStorage.setItem(USER_STORAGE_KEY, id);
-        setUserId(id);
       } catch (error) {
         console.error('Failed to initialize user:', error);
       }
@@ -44,10 +49,35 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     initUser();
   }, [getOrCreate]);
 
-  const role = user?.role ?? null;
+  // Step 2: once safeGet resolves, either confirm or replace the ID
+  useEffect(() => {
+    if (!pendingId) return;
+    if (user === undefined) return; // still loading
+
+    if (user !== null) {
+      // Valid user document — expose it
+      setVerifiedId(pendingId);
+    } else {
+      // Invalid/corrupt ID — create a fresh user
+      async function resetUser() {
+        try {
+          await AsyncStorage.removeItem(USER_STORAGE_KEY);
+          const id = await getOrCreate({});
+          await AsyncStorage.setItem(USER_STORAGE_KEY, id);
+          // Set pendingId to the new ID so safeGet re-runs and verifies it
+          setPendingId(id);
+        } catch (error) {
+          console.error('Failed to reset user:', error);
+        }
+      }
+      resetUser();
+    }
+  }, [pendingId, user, getOrCreate]);
+
+  const role = (user as any)?.role ?? null;
 
   return (
-    <UserContext.Provider value={{ userId, role }}>
+    <UserContext.Provider value={{ userId: verifiedId, role }}>
       {children}
     </UserContext.Provider>
   );

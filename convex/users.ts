@@ -22,6 +22,22 @@ export const get = query({
   },
 });
 
+// Safe version: accepts any string ID, returns null if not a valid user document.
+// Used by UserContext to recover from a stale/corrupt stored ID.
+export const safeGet = query({
+  args: { id: v.string() },
+  handler: async (ctx, { id }) => {
+    try {
+      const doc = await ctx.db.get(id as any);
+      // Reject if null or if the doc belongs to another table (has userId field)
+      if (!doc || "userId" in doc) return null;
+      return doc as any;
+    } catch {
+      return null;
+    }
+  },
+});
+
 export const updatePushToken = mutation({
   args: {
     id: v.id("users"),

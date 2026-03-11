@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
   FlatList,
   Keyboard,
   Pressable,
@@ -42,8 +41,14 @@ export default function ScanScreen() {
   const [processingStep, setProcessingStep] = useState('');
   const [prescriptionText, setPrescriptionText] = useState('');
   const [conditionText, setConditionText] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const extractMedications = api && useAction ? useAction(api.ai.extractMedications) : null;
+  const showError = useCallback((msg: string) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(''), 5000);
+  }, []);
+
+const extractMedications = api && useAction ? useAction(api.ai.extractMedications) : null;
   const extractFromText = api && useAction ? useAction(api.ai.extractFromText) : null;
   const suggestForCondition = api && useAction ? useAction(api.ai.suggestForCondition) : null;
   const checkInteractions = api && useAction ? useAction(api.drugApi.checkInteractions) : null;
@@ -61,15 +66,12 @@ export default function ScanScreen() {
   const processExtracted = useCallback(
     async (extracted: any) => {
       if (extracted.error) {
-        Alert.alert('Error', extracted.error);
+        showError(extracted.error);
         return;
       }
 
       if (!extracted.medications || extracted.medications.length === 0) {
-        Alert.alert(
-          'No Medications Found',
-          'Could not identify any medications. Try again with more detail.',
-        );
+        showError('Could not identify any medications. Try again with more detail.');
         return;
       }
 
@@ -77,10 +79,9 @@ export default function ScanScreen() {
       setProcessingStep('Checking for interactions...');
       const newMedNames = extracted.medications.map((m: any) => m.name);
       const existingMedNames = (activeMeds ?? []).map((m: any) => m.name);
-      const interactions = await checkInteractions({
-        medications: newMedNames,
-        existingMedications: existingMedNames,
-      });
+      const interactions = checkInteractions
+        ? await checkInteractions({ medications: newMedNames, existingMedications: existingMedNames })
+        : [];
 
       // Check condition safety if user provided a condition
       const condition = conditionText.trim();
@@ -103,13 +104,9 @@ export default function ScanScreen() {
         })),
         interactions,
       };
-      if (condition) {
-        explanationArgs.condition = condition;
-      }
-      if (conditionData) {
-        explanationArgs.conditionData = conditionData;
-      }
-      const explanation = await generateExplanation(explanationArgs);
+      if (condition) explanationArgs.condition = condition;
+      if (conditionData) explanationArgs.conditionData = conditionData;
+      const explanation = generateExplanation ? await generateExplanation(explanationArgs) : null;
 
       // Save and navigate
       if (userId && saveScan) {
@@ -142,17 +139,14 @@ export default function ScanScreen() {
       }
       setConditionText('');
     },
-    [userId, checkInteractions, checkConditionSafety, generateExplanation, saveScan, activeMeds, conditionText],
+    [userId, checkInteractions, checkConditionSafety, generateExplanation, saveScan, activeMeds, conditionText, showError],
   );
 
   // Handle image scan
   const handleImageCaptured = useCallback(
     async (base64: string) => {
       if (!extractMedications) {
-        Alert.alert(
-          'Setup Required',
-          'Connect Convex and set your OpenAI API key to enable scanning.',
-        );
+        showError('Setup required: Connect Convex and set your OpenAI API key to enable scanning.');
         return;
       }
       setIsProcessing(true);
@@ -162,27 +156,24 @@ export default function ScanScreen() {
         await processExtracted(extracted);
       } catch (error) {
         console.error('Scan error:', error);
-        Alert.alert('Scan Failed', 'Something went wrong. Please try again.');
+        showError('Scan failed. Please try again.');
       } finally {
         setIsProcessing(false);
         setProcessingStep('');
       }
     },
-    [extractMedications, processExtracted],
+    [extractMedications, processExtracted, showError],
   );
 
   // Handle text lookup
   const handleTextLookup = useCallback(async () => {
     const text = prescriptionText.trim();
     if (!text) {
-      Alert.alert('Enter a Prescription', 'Type a medication, e.g. "Bruffen 1x3"');
+      showError('Type a medication first, e.g. "Bruffen 1x3"');
       return;
     }
     if (!extractFromText) {
-      Alert.alert(
-        'Setup Required',
-        'Connect Convex and set your OpenAI API key to enable lookups.',
-      );
+      showError('Setup required: Connect Convex and set your OpenAI API key.');
       return;
     }
 
@@ -195,25 +186,22 @@ export default function ScanScreen() {
       setPrescriptionText('');
     } catch (error) {
       console.error('Lookup error:', error);
-      Alert.alert('Lookup Failed', 'Something went wrong. Please try again.');
+      showError(`Lookup failed: ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       setIsProcessing(false);
       setProcessingStep('');
     }
-  }, [prescriptionText, extractFromText, processExtracted]);
+  }, [prescriptionText, extractFromText, processExtracted, showError]);
 
   // Handle condition-based drug suggestion
   const handleConditionSuggest = useCallback(async () => {
     const condition = conditionText.trim();
     if (!condition) {
-      Alert.alert('Enter a Condition', 'Describe what you are suffering from.');
+      showError('Describe your condition first, e.g. "headache" or "flu"');
       return;
     }
     if (!suggestForCondition) {
-      Alert.alert(
-        'Setup Required',
-        'Connect Convex and set your OpenAI API key to enable suggestions.',
-      );
+      showError('Setup required: Connect Convex and set your OpenAI API key.');
       return;
     }
 
@@ -225,7 +213,7 @@ export default function ScanScreen() {
       await processExtracted(extracted);
     } catch (error) {
       console.error('Suggestion error:', error);
-      Alert.alert('Suggestion Failed', 'Something went wrong. Please try again.');
+      showError(`Suggestion failed: ${error instanceof Error ? error.message : 'Please try again.'}`);
     } finally {
       setIsProcessing(false);
       setProcessingStep('');
@@ -278,6 +266,14 @@ export default function ScanScreen() {
           </View>
         </View>
 
+        {/* Inline error banner */}
+        {errorMsg ? (
+          <View style={styles.errorBanner}>
+            <FontAwesome name="exclamation-circle" size={14} color="#fff" style={{ marginRight: 8 }} />
+            <Text style={styles.errorBannerText}>{errorMsg}</Text>
+          </View>
+        ) : null}
+
         {/* Scan options — camera & gallery side by side */}
         <Text style={styles.sectionLabel}>Scan a Prescription</Text>
         <CameraCapture onImageCaptured={handleImageCaptured} />
@@ -308,10 +304,9 @@ export default function ScanScreen() {
               style={({ pressed }) => [
                 styles.suggestButton,
                 !conditionText.trim() && styles.suggestButtonDisabled,
-                pressed && conditionText.trim() && styles.suggestButtonPressed,
+                pressed && styles.suggestButtonPressed,
               ]}
               onPress={handleConditionSuggest}
-              disabled={!conditionText.trim()}
               accessibilityRole="button"
               accessibilityLabel="Get drug suggestions"
             >
@@ -349,10 +344,9 @@ export default function ScanScreen() {
             style={({ pressed }) => [
               styles.searchButton,
               !prescriptionText.trim() && styles.searchButtonDisabled,
-              pressed && prescriptionText.trim() && styles.searchButtonPressed,
+              pressed && styles.searchButtonPressed,
             ]}
             onPress={handleTextLookup}
-            disabled={!prescriptionText.trim()}
             accessibilityRole="button"
             accessibilityLabel="Search prescription"
           >
@@ -409,6 +403,7 @@ export default function ScanScreen() {
           For informational purposes only. Not a substitute for professional medical advice.
         </Text>
       </ScrollView>
+
     </SafeAreaView>
   );
 }
@@ -429,6 +424,22 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       paddingHorizontal: 20,
       paddingTop: 8,
       paddingBottom: 24,
+    },
+    errorBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.danger,
+      marginHorizontal: 20,
+      marginBottom: 12,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    errorBannerText: {
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: '500',
+      flex: 1,
     },
     greeting: {
       fontSize: 14,

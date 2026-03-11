@@ -51,14 +51,21 @@ export default function TodosScreen() {
   }, [task, userId, addTodo]);
 
  const handleDelete = useCallback(
-    async (id: any, taskName: string) => {
-      const confirmed = window.confirm(`Remove "${taskName}"?`);
-      if (!confirmed) return;
-      try {
-        await removeTodo?.({ id });
-      } catch {
-        Alert.alert('Error', 'Failed to delete task.');
-      }
+    (id: any, taskName: string) => {
+      Alert.alert('Remove Task', `Remove "${taskName}"?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeTodo?.({ id });
+            } catch {
+              Alert.alert('Error', 'Failed to delete task.');
+            }
+          },
+        },
+      ]);
     },
     [removeTodo],
   );

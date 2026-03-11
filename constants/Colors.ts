@@ -1,5 +1,3 @@
-import { ViewStyle } from 'react-native';
-
 export const LightColors = {
   // Primary — warm teal, trustworthy but not clinical
   primary: '#0D9488',
@@ -119,26 +117,26 @@ export const DarkColors: typeof LightColors = {
 export function createShadows(isDark: boolean) {
   return {
     sm: {
-      shadowColor: '#000000',
+      shadowColor: '#000000' as string,
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: isDark ? 0.15 : 0.05,
       shadowRadius: 2,
       elevation: 1,
-    } as ViewStyle,
+    },
     md: {
-      shadowColor: '#000000',
+      shadowColor: '#000000' as string,
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: isDark ? 0.25 : 0.08,
       shadowRadius: 8,
       elevation: 3,
-    } as ViewStyle,
+    },
     lg: {
-      shadowColor: '#000000',
+      shadowColor: '#000000' as string,
       shadowOffset: { width: 0, height: 4 },
       shadowOpacity: isDark ? 0.35 : 0.1,
       shadowRadius: 16,
       elevation: 6,
-    } as ViewStyle,
+    },
   };
 }
 
