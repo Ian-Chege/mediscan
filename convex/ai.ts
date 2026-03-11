@@ -298,8 +298,10 @@ export const generateExplanation = action({
         }),
       ),
     ),
+    age: v.optional(v.string()),
+    allergies: v.optional(v.string()),
   },
-  handler: async (_ctx, { medications, interactions, condition, conditionData }) => {
+  handler: async (_ctx, { medications, interactions, condition, conditionData, age, allergies }) => {
     let conditionSection = "";
     if (condition && conditionData) {
       conditionSection = `
@@ -315,6 +317,30 @@ IMPORTANT: Based on the patient's stated condition and the FDA indication data a
 3. If a medication has warnings relevant to this condition, mention them
 4. Add a section titled "## Condition Safety Check" with your assessment`;
     }
+
+    const patientProfile = (age || allergies)
+      ? `\n\nPATIENT PROFILE:${age ? `\n- Age: ${age}` : ""}${allergies ? `\n- Known allergies: ${allergies}` : ""}`
+      : "";
+
+    const safetyRules = (age || allergies)
+      ? `
+For ageRestrictions:
+${age
+  ? `- The patient is ${age}. ALWAYS include exactly one entry in ageRestrictions for EACH medication.
+  - If there is a real concern for this age: use "high" (absolute contraindication) or "moderate" (caution needed).
+  - If this age is safe for this medication: use "safe" severity with a short reassuring message like "Safe for a [age]-year-old at standard dosage."
+  - Never leave ageRestrictions empty when age is provided.`
+  : `- No age provided → set ageRestrictions to [] for all medications.`}
+
+For allergyRestrictions:
+${allergies
+  ? `- The patient's known allergies: "${allergies}". ALWAYS include exactly one entry in allergyRestrictions for EACH medication.
+  - If the medication or a cross-reactive substance could trigger their allergy: use "high" severity with a clear warning.
+  - If the medication is safe for someone with these allergies: use "safe" severity with a short reassuring message like "No known cross-reactivity with [allergy]."
+  - Never leave allergyRestrictions empty when allergies are provided.`
+  : `- No allergies provided → set allergyRestrictions to [] for all medications.`}`
+      : `For ageRestrictions: No age provided → set ageRestrictions to [] for all medications.
+For allergyRestrictions: No allergies provided → set allergyRestrictions to [] for all medications.`;
 
     const content = await chatCompletion("gpt-4o-mini", [
       {
@@ -332,10 +358,10 @@ Return ONLY valid JSON with this exact structure:
     {
       "index": 0,
       "ageRestrictions": [
-        { "severity": "high|moderate|low", "text_en": "If you are [age group], do not take this — [reason]", "text_sw": "Swahili translation" }
+        { "severity": "high|moderate|low", "text_en": "Concern for this patient's age — [reason]", "text_sw": "Swahili translation" }
       ],
       "allergyRestrictions": [
-        { "allergen": "allergen name or drug class", "text_en": "Do not take if you are allergic to [X]. [Cross-reactivity note]", "text_sw": "Swahili translation" }
+        { "allergen": "specific allergen matched", "text_en": "Warning based on patient's allergy to [X]. [Details]", "text_sw": "Swahili translation" }
       ]
     }
   ]
@@ -343,32 +369,7 @@ Return ONLY valid JSON with this exact structure:
 
 IMPORTANT: medicationSafety must have one entry per medication, in the SAME ORDER as the MEDICATIONS list. index 0 = first medication, index 1 = second, etc.
 
-RULES for ageRestrictions — check EVERY medication:
-- "high" = absolute contraindication for an age group:
-  - Aspirin: under 16 (Reye's syndrome)
-  - Tetracycline/doxycycline: under 8 (permanent tooth/bone damage)
-  - Codeine: under 12 (respiratory depression risk)
-  - Ibuprofen/NSAIDs: under 6 months
-  - Fluoroquinolones (ciprofloxacin): under 18 (cartilage damage)
-  - Metoclopramide: under 1 year
-- "moderate" = caution / dose adjustment:
-  - NSAIDs in elderly 65+ (GI bleeding, kidney risk)
-  - Benzodiazepines in elderly (fall risk, confusion)
-  - Metformin in elderly with declining kidney function
-  - ACE inhibitors: careful dosing in elderly
-- If NO known age restriction exists → set ageRestrictions to []
-
-RULES for allergyRestrictions — ALWAYS list ALL known allergens for EVERY medication. Be thorough:
-- List EVERY allergen class and cross-reactive agent, one entry each
-- Penicillins (amoxicillin, ampicillin, co-amoxiclav): list penicillin, then note ~10% cross-reactivity with cephalosporins
-- Cephalosporins: list cephalosporin class, note possible penicillin cross-reactivity
-- NSAIDs (ibuprofen, naproxen, diclofenac, aspirin, ketorolac): list NSAID/aspirin hypersensitivity as one entry, then aspirin-exacerbated respiratory disease (AERD) as another
-- Sulfonamides (sulfamethoxazole, trimethoprim-sulfamethoxazole): list sulfa
-- Statins: list statin class (rare myopathy/rhabdomyolysis risk in sensitive patients)
-- Macrolides (azithromycin, erythromycin): list macrolide class
-- ACE inhibitors: list ACE inhibitor class (angioedema risk)
-- Opioids (codeine, tramadol): list opioid class
-- If a medication truly has no notable allergy concerns → set allergyRestrictions to []
+${safetyRules}
 
 Guidelines for en/sw explanations:
 - Use very simple, short sentences a patient can understand
@@ -397,16 +398,29 @@ ${
         )
         .join("\n")
     : "None found"
-}${conditionSection}`,
+}${conditionSection}${patientProfile}`,
       },
-    ], 1500);
+    ], 4000);
 
-    const parsed = JSON.parse(content);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      // Response was truncated — strip trailing incomplete data and try again
+      const lastBrace = content.lastIndexOf('"}');
+      const trimmed = lastBrace !== -1 ? content.substring(0, lastBrace + 2) + "]}]}" : null;
+      try {
+        parsed = trimmed ? JSON.parse(trimmed) : null;
+      } catch {
+        parsed = null;
+      }
+    }
+
     return JSON.stringify({
-      en: parsed.en,
-      sw: parsed.sw,
-      conditionMatches: parsed.conditionMatches || [],
-      medicationSafety: parsed.medicationSafety || [],
+      en: parsed?.en ?? "Could not generate explanation. Please try again.",
+      sw: parsed?.sw ?? "Haikuweza kutoa maelezo. Tafadhali jaribu tena.",
+      conditionMatches: parsed?.conditionMatches || [],
+      medicationSafety: parsed?.medicationSafety || [],
     });
   },
 });

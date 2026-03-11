@@ -87,6 +87,7 @@ type AgeRestriction = {
 
 type AllergyRestriction = {
   allergen: string;
+  severity?: string;
   text_en: string;
   text_sw: string;
 };
@@ -328,46 +329,57 @@ export default function ScanResultsScreen() {
                     <Text style={[styles.matchBadgeText, { color: badge.color }]}>{badge.reason}</Text>
                   </View>
                 )}
-                {safety?.ageRestrictions?.map((r, i) => (
-                  <View key={`age-${i}`} style={[styles.safetyCard, {
-                    backgroundColor: r.severity === 'high' ? colors.dangerSoft : colors.warningSoft,
-                    borderColor: r.severity === 'high' ? colors.danger + '40' : colors.warning + '40',
-                  }]}>
-                    <View style={styles.safetyCardHeader}>
-                      <FontAwesome
-                        name="ban"
-                        size={13}
-                        color={r.severity === 'high' ? colors.danger : colors.warning}
-                      />
-                      <Text style={[styles.safetyCardLabel, {
-                        color: r.severity === 'high' ? colors.danger : colors.warning,
-                      }]}>
-                        {l.ageRestriction}
-                      </Text>
-                    </View>
-                    <Text style={[styles.safetyCardText, {
-                      color: r.severity === 'high' ? colors.danger : colors.warning,
+                {safety?.ageRestrictions?.map((r, i) => {
+                  const isSafe = r.severity === 'safe';
+                  const isHigh = r.severity === 'high';
+                  const ageColor = isSafe ? colors.secondary : isHigh ? colors.danger : colors.warning;
+                  const ageBg = isSafe ? colors.secondarySoft : isHigh ? colors.dangerSoft : colors.warningSoft;
+                  return (
+                    <View key={`age-${i}`} style={[styles.safetyCard, {
+                      backgroundColor: ageBg,
+                      borderColor: ageColor + '40',
                     }]}>
-                      {lang === 'sw' ? r.text_sw : r.text_en}
-                    </Text>
-                  </View>
-                ))}
-                {safety?.allergyRestrictions?.map((r, i) => (
-                  <View key={`allergy-${i}`} style={[styles.safetyCard, {
-                    backgroundColor: colors.dangerSoft,
-                    borderColor: colors.danger + '40',
-                  }]}>
-                    <View style={styles.safetyCardHeader}>
-                      <FontAwesome name="exclamation-triangle" size={13} color={colors.danger} />
-                      <Text style={[styles.safetyCardLabel, { color: colors.danger }]}>
-                        {l.allergyWarning}: {r.allergen}
+                      <View style={styles.safetyCardHeader}>
+                        <FontAwesome
+                          name={isSafe ? 'check-circle' : 'ban'}
+                          size={13}
+                          color={ageColor}
+                        />
+                        <Text style={[styles.safetyCardLabel, { color: ageColor }]}>
+                          {l.ageRestriction}
+                        </Text>
+                      </View>
+                      <Text style={[styles.safetyCardText, { color: ageColor }]}>
+                        {lang === 'sw' ? r.text_sw : r.text_en}
                       </Text>
                     </View>
-                    <Text style={[styles.safetyCardText, { color: colors.danger }]}>
-                      {lang === 'sw' ? r.text_sw : r.text_en}
-                    </Text>
-                  </View>
-                ))}
+                  );
+                })}
+                {safety?.allergyRestrictions?.map((r, i) => {
+                  const isSafe = r.severity === 'safe';
+                  const allergyColor = isSafe ? colors.secondary : colors.danger;
+                  const allergyBg = isSafe ? colors.secondarySoft : colors.dangerSoft;
+                  return (
+                    <View key={`allergy-${i}`} style={[styles.safetyCard, {
+                      backgroundColor: allergyBg,
+                      borderColor: allergyColor + '40',
+                    }]}>
+                      <View style={styles.safetyCardHeader}>
+                        <FontAwesome
+                          name={isSafe ? 'check-circle' : 'exclamation-triangle'}
+                          size={13}
+                          color={allergyColor}
+                        />
+                        <Text style={[styles.safetyCardLabel, { color: allergyColor }]}>
+                          {l.allergyWarning}{r.allergen ? `: ${r.allergen}` : ''}
+                        </Text>
+                      </View>
+                      <Text style={[styles.safetyCardText, { color: allergyColor }]}>
+                        {lang === 'sw' ? r.text_sw : r.text_en}
+                      </Text>
+                    </View>
+                  );
+                })}
                 <View style={styles.medDetailsRow}>
                   <View style={styles.medDetail}>
                     <Text style={styles.medDetailLabel}>{l.dosage}</Text>

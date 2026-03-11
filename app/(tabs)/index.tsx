@@ -41,6 +41,8 @@ export default function ScanScreen() {
   const [processingStep, setProcessingStep] = useState('');
   const [prescriptionText, setPrescriptionText] = useState('');
   const [conditionText, setConditionText] = useState('');
+  const [ageText, setAgeText] = useState('');
+  const [allergiesText, setAllergiesText] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
   const showError = useCallback((msg: string) => {
@@ -64,7 +66,7 @@ const extractMedications = api && useAction ? useAction(api.ai.extractMedication
 
   // Shared logic: take extracted meds → check interactions → get explanation → navigate
   const processExtracted = useCallback(
-    async (extracted: any) => {
+    async (extracted: any, overrideCondition?: string) => {
       if (extracted.error) {
         showError(extracted.error);
         return;
@@ -84,7 +86,7 @@ const extractMedications = api && useAction ? useAction(api.ai.extractMedication
         : [];
 
       // Check condition safety if user provided a condition
-      const condition = conditionText.trim();
+      const condition = overrideCondition ?? conditionText.trim();
       let conditionData = null;
       if (condition && checkConditionSafety) {
         setProcessingStep('Checking medication safety for your condition...');
@@ -106,6 +108,8 @@ const extractMedications = api && useAction ? useAction(api.ai.extractMedication
       };
       if (condition) explanationArgs.condition = condition;
       if (conditionData) explanationArgs.conditionData = conditionData;
+      if (ageText.trim()) explanationArgs.age = ageText.trim();
+      if (allergiesText.trim()) explanationArgs.allergies = allergiesText.trim();
       const explanation = generateExplanation ? await generateExplanation(explanationArgs) : null;
 
       // Save and navigate
@@ -139,7 +143,7 @@ const extractMedications = api && useAction ? useAction(api.ai.extractMedication
       }
       setConditionText('');
     },
-    [userId, checkInteractions, checkConditionSafety, generateExplanation, saveScan, activeMeds, conditionText, showError],
+    [userId, checkInteractions, checkConditionSafety, generateExplanation, saveScan, activeMeds, conditionText, ageText, allergiesText, showError],
   );
 
   // Handle image scan
@@ -210,7 +214,7 @@ const extractMedications = api && useAction ? useAction(api.ai.extractMedication
     try {
       setProcessingStep('Finding medications for your condition...');
       const extracted = await suggestForCondition({ condition });
-      await processExtracted(extracted);
+      await processExtracted(extracted, condition);
     } catch (error) {
       console.error('Suggestion error:', error);
       showError(`Suggestion failed: ${error instanceof Error ? error.message : 'Please try again.'}`);
@@ -278,9 +282,12 @@ const extractMedications = api && useAction ? useAction(api.ai.extractMedication
         <Text style={styles.sectionLabel}>Scan a Prescription</Text>
         <CameraCapture onImageCaptured={handleImageCaptured} />
 
-        {/* Condition input */}
+        {/* Patient profile — condition, age, allergies */}
         <View style={styles.conditionSection}>
-          <Text style={styles.conditionLabel}>What are you suffering from?</Text>
+          <Text style={styles.conditionLabel}>Your Profile</Text>
+
+          {/* Condition row */}
+          <Text style={styles.profileFieldLabel}>Condition / Symptoms</Text>
           <View style={styles.conditionInputRow}>
             <View style={styles.conditionInputContainer}>
               <FontAwesome name="heartbeat" size={14} color={colors.textTertiary} style={styles.inputIcon} />
@@ -313,8 +320,49 @@ const extractMedications = api && useAction ? useAction(api.ai.extractMedication
               <FontAwesome name="search" size={16} color={colors.textInverse} />
             </Pressable>
           </View>
+
+          {/* Age row */}
+          <Text style={styles.profileFieldLabel}>Age</Text>
+          <View style={styles.profileInputContainer}>
+            <FontAwesome name="user" size={14} color={colors.textTertiary} style={styles.inputIcon} />
+            <TextInput
+              style={styles.conditionInput}
+              value={ageText}
+              onChangeText={setAgeText}
+              placeholder='e.g. "15 years old", "45"'
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="done"
+              accessibilityLabel="Enter your age"
+            />
+            {ageText.length > 0 && (
+              <Pressable onPress={() => setAgeText('')} hitSlop={8}>
+                <FontAwesome name="times-circle" size={16} color={colors.textTertiary} />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Allergies row */}
+          <Text style={styles.profileFieldLabel}>Known Allergies</Text>
+          <View style={styles.profileInputContainer}>
+            <FontAwesome name="exclamation-triangle" size={13} color={colors.textTertiary} style={styles.inputIcon} />
+            <TextInput
+              style={styles.conditionInput}
+              value={allergiesText}
+              onChangeText={setAllergiesText}
+              placeholder='e.g. "Penicillin, dairy, peanuts"'
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="done"
+              accessibilityLabel="Enter your known allergies"
+            />
+            {allergiesText.length > 0 && (
+              <Pressable onPress={() => setAllergiesText('')} hitSlop={8}>
+                <FontAwesome name="times-circle" size={16} color={colors.textTertiary} />
+              </Pressable>
+            )}
+          </View>
+
           <Text style={styles.conditionHint}>
-            Get drug suggestions, or leave filled when scanning a prescription to check safety
+            Fill in your profile to get personalised safety warnings when scanning
           </Text>
         </View>
 
@@ -486,10 +534,25 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       marginTop: 20,
     },
     conditionLabel: {
-      fontSize: 14,
-      fontWeight: '600',
+      fontSize: 15,
+      fontWeight: '700',
       color: colors.text,
-      marginBottom: 8,
+      marginBottom: 12,
+    },
+    profileFieldLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      marginBottom: 6,
+      marginTop: 10,
+    },
+    profileInputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      ...shadows.sm,
     },
     conditionInputRow: {
       flexDirection: 'row',
