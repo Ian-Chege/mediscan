@@ -79,13 +79,19 @@ export default function MedicationsScreen() {
     (id: any, name: string) => {
       Alert.alert(
         'Delete Medication',
-        `Remove ${name} from your list? This will also delete associated reminders.`,
+        `Remove ${name} from your list? This will also delete associated reminders and schedule entries.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Delete',
             style: 'destructive',
-            onPress: () => removeMedication?.({ id }),
+            onPress: async () => {
+              try {
+                await removeMedication?.({ id });
+              } catch {
+                Alert.alert('Error', 'Failed to delete medication. Please try again.');
+              }
+            },
           },
         ],
       );

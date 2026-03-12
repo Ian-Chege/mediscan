@@ -55,7 +55,8 @@
           "photosPermission": "DrugScan needs photo access to select prescription images.",
           "cameraPermission": "DrugScan needs camera access to scan prescriptions."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

@@ -84,13 +84,21 @@ export const toggleActive = mutation({
 export const remove = mutation({
   args: { id: v.id("medications") },
   handler: async (ctx, { id }) => {
-    // Delete associated reminders first
+    // Delete associated reminders
     const reminders = await ctx.db
       .query("reminders")
       .withIndex("by_medication", (q) => q.eq("medicationId", id))
       .collect();
     for (const reminder of reminders) {
       await ctx.db.delete(reminder._id);
+    }
+    // Delete associated schedule entries
+    const entries = await ctx.db
+      .query("scheduleEntries")
+      .withIndex("by_medication_date", (q) => q.eq("medicationId", id))
+      .collect();
+    for (const entry of entries) {
+      await ctx.db.delete(entry._id);
     }
     await ctx.db.delete(id);
   },

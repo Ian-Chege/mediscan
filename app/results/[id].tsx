@@ -44,6 +44,8 @@ const labels = {
     high: 'High risk',
     moderate: 'Caution',
     low: 'Low risk',
+    ageRestriction: 'Age restriction',
+    allergyWarning: 'Allergy warning',
   },
   sw: {
     medsFound: 'Dawa Zilizopatikana',
@@ -63,6 +65,8 @@ const labels = {
     high: 'Hatari kubwa',
     moderate: 'Tahadhari',
     low: 'Hatari ndogo',
+    ageRestriction: 'Kikwazo cha umri',
+    allergyWarning: 'Onyo la mzio',
   },
 };
 
@@ -75,17 +79,44 @@ type ConditionMatch = {
   reason_sw: string;
 };
 
-function parseExplanation(raw: string): { en: string; sw: string; conditionMatches: ConditionMatch[] } {
-  // New format: JSON string with { en, sw, conditionMatches }
+type AgeRestriction = {
+  severity: 'high' | 'moderate' | 'low';
+  text_en: string;
+  text_sw: string;
+};
+
+type AllergyRestriction = {
+  allergen: string;
+  severity?: string;
+  text_en: string;
+  text_sw: string;
+};
+
+type MedicationSafety = {
+  index: number;
+  ageRestrictions: AgeRestriction[];
+  allergyRestrictions: AllergyRestriction[];
+};
+
+function parseExplanation(raw: string): {
+  en: string;
+  sw: string;
+  conditionMatches: ConditionMatch[];
+  medicationSafety: MedicationSafety[];
+} {
   try {
     const parsed = JSON.parse(raw);
     if (parsed.en && parsed.sw) {
-      return { en: parsed.en, sw: parsed.sw, conditionMatches: parsed.conditionMatches || [] };
+      return {
+        en: parsed.en,
+        sw: parsed.sw,
+        conditionMatches: parsed.conditionMatches || [],
+        medicationSafety: parsed.medicationSafety || [],
+      };
     }
   } catch {
     // Not JSON — legacy format or plain text
   }
-  // Fallback: try the old marker format
   const marker = '---SWAHILI---';
   const idx = raw.indexOf(marker);
   if (idx !== -1) {
@@ -93,10 +124,10 @@ function parseExplanation(raw: string): { en: string; sw: string; conditionMatch
       en: raw.substring(0, idx).trim(),
       sw: raw.substring(idx + marker.length).trim(),
       conditionMatches: [],
+      medicationSafety: [],
     };
   }
-  // No Swahili available — show English for both
-  return { en: raw, sw: raw, conditionMatches: [] };
+  return { en: raw, sw: raw, conditionMatches: [], medicationSafety: [] };
 }
 
 function getSeverityInfo(severity: string, lang: Lang, colors: AppColors) {
@@ -182,20 +213,23 @@ export default function ScanResultsScreen() {
 
   const explanationParts = parseExplanation(scan.explanation ?? '');
 
-  // Build a lookup map: drug name (lowercased) → condition match
+  // Build condition match map by drug name (fuzzy)
   const conditionMatchMap = new Map<string, ConditionMatch>();
   for (const cm of explanationParts.conditionMatches) {
     conditionMatchMap.set(cm.drug.toLowerCase(), cm);
   }
-
   function getMatchForMed(medName: string): ConditionMatch | undefined {
-    // Try exact match first, then partial (drug name contained in med name or vice versa)
     const lower = medName.toLowerCase();
     if (conditionMatchMap.has(lower)) return conditionMatchMap.get(lower);
     for (const [key, val] of conditionMatchMap) {
       if (lower.includes(key) || key.includes(lower)) return val;
     }
     return undefined;
+  }
+
+  // Safety info is looked up by array index — no name matching needed
+  function getSafetyForIndex(index: number): MedicationSafety | undefined {
+    return explanationParts.medicationSafety.find((s) => s.index === index);
   }
 
   function getMatchBadge(match: ConditionMatch) {
@@ -281,6 +315,7 @@ export default function ScanResultsScreen() {
           (med: { name: string; dosage: string; frequency: string; confidence?: string }, index: number) => {
             const match = scan.condition ? getMatchForMed(med.name) : undefined;
             const badge = match ? getMatchBadge(match) : undefined;
+            const safety = getSafetyForIndex(index);
             return (
             <View key={index} style={styles.medCard}>
               <View style={styles.medIconCircle}>
@@ -294,6 +329,57 @@ export default function ScanResultsScreen() {
                     <Text style={[styles.matchBadgeText, { color: badge.color }]}>{badge.reason}</Text>
                   </View>
                 )}
+                {safety?.ageRestrictions?.map((r, i) => {
+                  const isSafe = r.severity === 'safe';
+                  const isHigh = r.severity === 'high';
+                  const ageColor = isSafe ? colors.secondary : isHigh ? colors.danger : colors.warning;
+                  const ageBg = isSafe ? colors.secondarySoft : isHigh ? colors.dangerSoft : colors.warningSoft;
+                  return (
+                    <View key={`age-${i}`} style={[styles.safetyCard, {
+                      backgroundColor: ageBg,
+                      borderColor: ageColor + '40',
+                    }]}>
+                      <View style={styles.safetyCardHeader}>
+                        <FontAwesome
+                          name={isSafe ? 'check-circle' : 'ban'}
+                          size={13}
+                          color={ageColor}
+                        />
+                        <Text style={[styles.safetyCardLabel, { color: ageColor }]}>
+                          {l.ageRestriction}
+                        </Text>
+                      </View>
+                      <Text style={[styles.safetyCardText, { color: ageColor }]}>
+                        {lang === 'sw' ? r.text_sw : r.text_en}
+                      </Text>
+                    </View>
+                  );
+                })}
+                {safety?.allergyRestrictions?.map((r, i) => {
+                  const isSafe = r.severity === 'safe';
+                  const allergyColor = isSafe ? colors.secondary : colors.danger;
+                  const allergyBg = isSafe ? colors.secondarySoft : colors.dangerSoft;
+                  return (
+                    <View key={`allergy-${i}`} style={[styles.safetyCard, {
+                      backgroundColor: allergyBg,
+                      borderColor: allergyColor + '40',
+                    }]}>
+                      <View style={styles.safetyCardHeader}>
+                        <FontAwesome
+                          name={isSafe ? 'check-circle' : 'exclamation-triangle'}
+                          size={13}
+                          color={allergyColor}
+                        />
+                        <Text style={[styles.safetyCardLabel, { color: allergyColor }]}>
+                          {l.allergyWarning}{r.allergen ? `: ${r.allergen}` : ''}
+                        </Text>
+                      </View>
+                      <Text style={[styles.safetyCardText, { color: allergyColor }]}>
+                        {lang === 'sw' ? r.text_sw : r.text_en}
+                      </Text>
+                    </View>
+                  );
+                })}
                 <View style={styles.medDetailsRow}>
                   <View style={styles.medDetail}>
                     <Text style={styles.medDetailLabel}>{l.dosage}</Text>
@@ -572,6 +658,30 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       fontSize: 12,
       fontWeight: '600',
       flex: 1,
+    },
+    safetyCard: {
+      borderRadius: 10,
+      borderWidth: 1,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginBottom: 8,
+      gap: 4,
+    },
+    safetyCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    safetyCardLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    safetyCardText: {
+      fontSize: 13,
+      fontWeight: '500',
+      lineHeight: 18,
     },
     medDetailsRow: {
       flexDirection: 'row',

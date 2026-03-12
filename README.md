@@ -36,14 +36,14 @@ AI-powered prescription scanner — snap a photo or type a shorthand like `Bruff
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | React Native 0.81 + Expo SDK 54 |
-| Routing | Expo Router 6 (file-based) |
-| Backend | Convex (serverless functions + real-time database) |
-| AI | OpenAI GPT-4o (vision + text completions) |
-| Drug Data | OpenFDA API (public, no key needed) |
-| Language | TypeScript 5.9 (strict) |
+| Layer     | Technology                                         |
+| --------- | -------------------------------------------------- |
+| Framework | React Native 0.81 + Expo SDK 54                    |
+| Routing   | Expo Router 6 (file-based)                         |
+| Backend   | Convex (serverless functions + real-time database) |
+| AI        | OpenAI GPT-4o (vision + text completions)          |
+| Drug Data | OpenFDA API (public, no key needed)                |
+| Language  | TypeScript 5.9 (strict)                            |
 
 ---
 
@@ -73,10 +73,10 @@ Scan the QR code with Expo Go on your phone, or press `a` for Android emulator.
 
 ### Environment Variables
 
-| Variable | Where | Purpose |
-|----------|-------|---------|
-| `EXPO_PUBLIC_CONVEX_URL` | `.env.local` | Connects the app to the shared Convex deployment |
-| `OPENAI_API_KEY` | Convex env (already set) | Used server-side by Convex actions — no local setup needed |
+| Variable                 | Where                    | Purpose                                                    |
+| ------------------------ | ------------------------ | ---------------------------------------------------------- |
+| `EXPO_PUBLIC_CONVEX_URL` | `.env.local`             | Connects the app to the shared Convex deployment           |
+| `OPENAI_API_KEY`         | Convex env (already set) | Used server-side by Convex actions — no local setup needed |
 
 > The OpenFDA API is public and requires no key.
 
@@ -142,37 +142,41 @@ mediscan/
 ## Features
 
 ### Scan Screen
+
 - **Text input** — type shorthand like `Bruffen 1x3` or `Amoxicillin 500mg twice daily`
 - **Image scanning** — take a photo or pick from gallery
 - **Processing pipeline**: extract meds (GPT-4o) → check interactions (OpenFDA) → generate explanation (GPT-4o) → show results
 - **Recent scans** section with interaction warning indicators
 
 ### Results Screen
+
 - Extracted medications with confidence badges
 - Drug interaction warnings color-coded by severity
 - AI-generated plain-language explanation with tips per medication
 - "Add to My Meds" button per medication
 
 ### My Meds
+
 - Active / All filter toggle
 - Pause/resume and delete medications
 - Add medications manually (name, dosage, frequency, purpose, instructions)
 
 ### Reminders
+
 - Set reminders for saved medications
 - Pick time (24h) and days (daily or specific weekdays)
 - Toggle on/off and delete with confirmation
 
 ### Convex Backend
 
-| File | Functions |
-|------|-----------|
-| `ai.ts` | `extractMedications` (image), `extractFromText` (text), `generateExplanation` |
-| `drugApi.ts` | `checkInteractions` (OpenFDA `/drug/label.json`) |
-| `scans.ts` | `list`, `get`, `save`, `remove` |
-| `medications.ts` | `list`, `listActive`, `get`, `add`, `update`, `toggleActive`, `remove` |
-| `reminders.ts` | `list` (enriched with medication info), `add`, `update`, `toggleActive`, `remove` |
-| `users.ts` | `getOrCreate`, `get`, `updatePushToken` |
+| File             | Functions                                                                         |
+| ---------------- | --------------------------------------------------------------------------------- |
+| `ai.ts`          | `extractMedications` (image), `extractFromText` (text), `generateExplanation`     |
+| `drugApi.ts`     | `checkInteractions` (OpenFDA `/drug/label.json`)                                  |
+| `scans.ts`       | `list`, `get`, `save`, `remove`                                                   |
+| `medications.ts` | `list`, `listActive`, `get`, `add`, `update`, `toggleActive`, `remove`            |
+| `reminders.ts`   | `list` (enriched with medication info), `add`, `update`, `toggleActive`, `remove` |
+| `users.ts`       | `getOrCreate`, `get`, `updatePushToken`                                           |
 
 ---
 
@@ -198,3 +202,42 @@ npm run web        # expo start --web
 ---
 
 > **Disclaimer:** DrugScan is for informational purposes only — not a substitute for professional medical advice.
+
+<!-- This is the set up process after the Login functionality commit -->
+
+### Setup
+
+1. **Clone and install**
+
+```bash
+   git clone
+   cd mediscan
+   npm install
+```
+
+2. **Set up Convex**
+
+```bash
+   npx convex dev
+```
+
+This will prompt you to log in and create a new Convex project. It will automatically create your `.env.local` with `EXPO_PUBLIC_CONVEX_URL`.
+
+3. **Set up Auth**
+
+```bash
+   npx @convex-dev/auth setup
+```
+
+4. **Add your OpenAI key**
+   In `.env.local`, add:
+
+```
+   OPENAI_API_KEY=your-key-here
+```
+
+5. **Run the app**
+
+```bash
+   npx expo start
+```
