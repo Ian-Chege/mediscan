@@ -90,6 +90,12 @@ export function MedicationCard({
             <FontAwesome name="clock-o" size={11} color={colors.primary} />
             <Text style={styles.detailText}>{frequency}</Text>
           </View>
+          {!isActive && (
+            <View style={[styles.detailChip, { backgroundColor: colors.warningSoft }]}>
+              <FontAwesome name="pause" size={9} color={colors.warning} />
+              <Text style={[styles.detailText, { color: colors.warning }]}>Paused</Text>
+            </View>
+          )}
         </View>
 
         {purpose && (

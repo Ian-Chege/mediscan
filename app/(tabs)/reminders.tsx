@@ -150,6 +150,11 @@ export default function RemindersScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Reminders</Text>
+        {reminders && reminders.length > 0 && (
+          <Text style={styles.headerCount}>
+            {reminders.filter((r: any) => r.isActive).length} active
+          </Text>
+        )}
       </View>
 
       {!reminders || reminders.length === 0 ? (
@@ -341,6 +346,12 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       fontWeight: '800',
       color: colors.text,
       letterSpacing: -0.8,
+    },
+    headerCount: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      marginTop: 2,
     },
     list: {
       padding: 20,
