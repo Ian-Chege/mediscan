@@ -1,9 +1,13 @@
-import { mutation, query } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 
 export const list = query({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
+    const callerId = await getAuthUserId(ctx);
+    if (!callerId || callerId !== userId) return [];
+
     return await ctx.db
       .query("scans")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -15,7 +19,28 @@ export const list = query({
 export const get = query({
   args: { id: v.id("scans") },
   handler: async (ctx, { id }) => {
-    return await ctx.db.get(id);
+    const callerId = await getAuthUserId(ctx);
+    if (!callerId) return null;
+
+    const scan = await ctx.db.get(id);
+    if (!scan) return null;
+
+    // Allow the owner or an admin with accepted oversight
+    if (scan.userId === callerId) return scan;
+
+    const caller = await ctx.db.get(callerId);
+    if (caller?.role === "admin") {
+      const oversight = await ctx.db
+        .query("oversightRequests")
+        .withIndex("by_admin_and_patient", (q) =>
+          q.eq("adminId", callerId).eq("patientId", scan.userId),
+        )
+        .filter((q) => q.eq(q.field("status"), "accepted"))
+        .first();
+      if (oversight) return scan;
+    }
+
+    return null;
   },
 });
 
@@ -42,6 +67,11 @@ export const save = mutation({
     explanation: v.string(),
   },
   handler: async (ctx, args) => {
+    const callerId = await getAuthUserId(ctx);
+    if (!callerId || callerId !== args.userId) {
+      throw new Error("Unauthorized");
+    }
+
     return await ctx.db.insert("scans", {
       ...args,
       scannedAt: Date.now(),
@@ -52,6 +82,14 @@ export const save = mutation({
 export const remove = mutation({
   args: { id: v.id("scans") },
   handler: async (ctx, { id }) => {
+    const callerId = await getAuthUserId(ctx);
+    if (!callerId) throw new Error("Unauthorized");
+
+    const scan = await ctx.db.get(id);
+    if (!scan) return;
+
+    if (scan.userId !== callerId) throw new Error("Unauthorized");
+
     await ctx.db.delete(id);
   },
 });

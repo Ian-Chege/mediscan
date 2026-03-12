@@ -1,22 +1,38 @@
 "use node";
 
-import { action } from "./_generated/server";
 import { v } from "convex/values";
 import OpenAI from "openai";
+import { action } from "./_generated/server";
 
 const FDA_API_BASE = "https://api.fda.gov/drug";
 
 function determineSeverity(text: string): string {
   const t = text.toLowerCase();
-  if (t.includes("contraindicated") || t.includes("do not") || t.includes("fatal")) return "high";
-  if (t.includes("caution") || t.includes("monitor") || t.includes("may increase")) return "moderate";
+  if (
+    t.includes("contraindicated") ||
+    t.includes("do not") ||
+    t.includes("fatal")
+  )
+    return "high";
+  if (
+    t.includes("caution") ||
+    t.includes("monitor") ||
+    t.includes("may increase")
+  )
+    return "moderate";
   return "low";
 }
 
-function extractRelevantText(text: string, drug1: string, drug2: string): string {
+function extractRelevantText(
+  text: string,
+  drug1: string,
+  drug2: string,
+): string {
   const sentences = text.split(/[.!?]+/);
   const relevant = sentences.find(
-    (s) => s.toLowerCase().includes(drug1.toLowerCase()) || s.toLowerCase().includes(drug2.toLowerCase()),
+    (s) =>
+      s.toLowerCase().includes(drug1.toLowerCase()) ||
+      s.toLowerCase().includes(drug2.toLowerCase()),
   );
   return relevant?.trim().substring(0, 200) || text.substring(0, 200);
 }
@@ -30,8 +46,14 @@ async function checkPair(drug1: string, drug2: string) {
     const data = await res.json();
     if (!data.results?.length) return null;
     const interactionText = data.results[0].drug_interactions?.[0] || "";
-    if (!interactionText.toLowerCase().includes(drug2.toLowerCase())) return null;
-    return { drug1, drug2, severity: determineSeverity(interactionText), description: extractRelevantText(interactionText, drug1, drug2) };
+    if (!interactionText.toLowerCase().includes(drug2.toLowerCase()))
+      return null;
+    return {
+      drug1,
+      drug2,
+      severity: determineSeverity(interactionText),
+      description: extractRelevantText(interactionText, drug1, drug2),
+    };
   } catch {
     return null;
   }
@@ -44,7 +66,10 @@ export const processScan = action({
     prescriptionText: v.optional(v.string()),
     existingMedications: v.array(v.string()),
   },
-  handler: async (_ctx, { imageBase64, prescriptionText, existingMedications }) => {
+  handler: async (
+    _ctx,
+    { imageBase64, prescriptionText, existingMedications },
+  ) => {
     const openai = getOpenAI();
 
     // Step 1: Extract medications (image or text)
@@ -62,8 +87,17 @@ If not a prescription: { "medications": [], "error": "Not a prescription" }`,
           {
             role: "user",
             content: [
-              { type: "text", text: "Extract all medications from this prescription:" },
-              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}`, detail: "auto" } },
+              {
+                type: "text",
+                text: "Extract all medications from this prescription:",
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${imageBase64}`,
+                  detail: "auto",
+                },
+              },
             ],
           },
         ],
@@ -81,7 +115,10 @@ If not a prescription: { "medications": [], "error": "Not a prescription" }`,
 Return ONLY valid JSON: { "medications": [{ "name": "...", "dosage": "...", "frequency": "...", "confidence": "high|medium|low" }], "notes": "..." }
 If not a medication: { "medications": [], "error": "Could not identify any medications" }`,
           },
-          { role: "user", content: `Parse this prescription: ${prescriptionText}` },
+          {
+            role: "user",
+            content: `Parse this prescription: ${prescriptionText}`,
+          },
         ],
         response_format: { type: "json_object" },
         max_tokens: 800,
@@ -94,14 +131,19 @@ If not a medication: { "medications": [], "error": "Could not identify any medic
     }
 
     // Step 2: Check all drug pairs in PARALLEL (not sequential)
-    const allMeds = [...extracted.medications.map((m: any) => m.name), ...existingMedications];
+    const allMeds = [
+      ...extracted.medications.map((m: any) => m.name),
+      ...existingMedications,
+    ];
     const pairs: [string, string][] = [];
     for (let i = 0; i < allMeds.length; i++) {
       for (let j = i + 1; j < allMeds.length; j++) {
         pairs.push([allMeds[i], allMeds[j]]);
       }
     }
-    const interactions = (await Promise.all(pairs.map(([d1, d2]) => checkPair(d1, d2)))).filter(Boolean);
+    const interactions = (
+      await Promise.all(pairs.map(([d1, d2]) => checkPair(d1, d2)))
+    ).filter(Boolean);
 
     // Step 3: Generate explanation with gpt-4o-mini (fast, cost-effective)
     const explanationRes = await openai.chat.completions.create({

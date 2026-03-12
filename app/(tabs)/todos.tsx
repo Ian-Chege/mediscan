@@ -1,4 +1,8 @@
-import { useCallback, useMemo, useState } from 'react';
+import type { AppShadows } from "@/constants/Colors";
+import { useUser } from "@/contexts/UserContext";
+import { AppColors, useTheme } from "@/hooks/useTheme";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -7,19 +11,15 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useTheme, AppColors } from '@/hooks/useTheme';
-import type { AppShadows } from '@/constants/Colors';
-import { useUser } from '@/contexts/UserContext';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 let useMutation: any, useQuery: any, api: any;
 try {
-  const convexReact = require('convex/react');
+  const convexReact = require("convex/react");
   useMutation = convexReact.useMutation;
   useQuery = convexReact.useQuery;
-  api = require('@/convex/_generated/api').api;
+  api = require("@/convex/_generated/api").api;
 } catch {
   // Convex not yet set up
 }
@@ -27,37 +27,42 @@ try {
 export default function TodosScreen() {
   const userId = useUser();
   const { colors, shadows } = useTheme();
-  const styles = useMemo(() => createStyles(colors, shadows), [colors, shadows]);
+  const styles = useMemo(
+    () => createStyles(colors, shadows),
+    [colors, shadows],
+  );
 
-  const [task, setTask] = useState('');
-  const [filter, setFilter] = useState<'all' | 'pending' | 'done'>('all');
+  const [task, setTask] = useState("");
+  const [filter, setFilter] = useState<"all" | "pending" | "done">("all");
 
-  const todos = api && useQuery
-    ? useQuery(api.todos.list, userId ? { userId: userId as any } : 'skip')
-    : undefined;
+  const todos =
+    api && useQuery
+      ? useQuery(api.todos.list, userId ? { userId: userId as any } : "skip")
+      : undefined;
 
   const addTodo = api && useMutation ? useMutation(api.todos.add) : null;
-  const toggleComplete = api && useMutation ? useMutation(api.todos.toggleComplete) : null;
+  const toggleComplete =
+    api && useMutation ? useMutation(api.todos.toggleComplete) : null;
   const removeTodo = api && useMutation ? useMutation(api.todos.remove) : null;
 
   const handleAdd = useCallback(async () => {
     if (!task.trim() || !userId || !addTodo) return;
     try {
       await addTodo({ userId: userId as any, task: task.trim() });
-      setTask('');
+      setTask("");
     } catch {
-      Alert.alert('Error', 'Failed to add task.');
+      Alert.alert("Error", "Failed to add task.");
     }
   }, [task, userId, addTodo]);
 
- const handleDelete = useCallback(
+  const handleDelete = useCallback(
     async (id: any, taskName: string) => {
       const confirmed = window.confirm(`Remove "${taskName}"?`);
       if (!confirmed) return;
       try {
         await removeTodo?.({ id });
       } catch {
-        Alert.alert('Error', 'Failed to delete task.');
+        Alert.alert("Error", "Failed to delete task.");
       }
     },
     [removeTodo],
@@ -68,15 +73,15 @@ export default function TodosScreen() {
       try {
         await toggleComplete?.({ id });
       } catch {
-        Alert.alert('Error', 'Failed to update task.');
+        Alert.alert("Error", "Failed to update task.");
       }
     },
     [toggleComplete],
   );
 
   const filtered = (todos ?? []).filter((t: any) => {
-    if (filter === 'pending') return !t.completed;
-    if (filter === 'done') return t.completed;
+    if (filter === "pending") return !t.completed;
+    if (filter === "done") return t.completed;
     return true;
   });
 
@@ -105,7 +110,10 @@ export default function TodosScreen() {
           returnKeyType="done"
         />
         <Pressable
-          style={({ pressed }) => [styles.addButton, pressed && styles.addButtonPressed]}
+          style={({ pressed }) => [
+            styles.addButton,
+            pressed && styles.addButtonPressed,
+          ]}
           onPress={handleAdd}
           accessibilityRole="button"
           accessibilityLabel="Add task"
@@ -116,7 +124,7 @@ export default function TodosScreen() {
 
       {/* Filter Tabs */}
       <View style={styles.filterRow}>
-        {(['all', 'pending', 'done'] as const).map((f) => (
+        {(["all", "pending", "done"] as const).map((f) => (
           <Pressable
             key={f}
             style={({ pressed }) => [
@@ -128,7 +136,12 @@ export default function TodosScreen() {
             accessibilityRole="button"
             accessibilityState={{ selected: filter === f }}
           >
-            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
+            <Text
+              style={[
+                styles.filterText,
+                filter === f && styles.filterTextActive,
+              ]}
+            >
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </Text>
           </Pressable>
@@ -145,12 +158,12 @@ export default function TodosScreen() {
             style={{ marginBottom: 16 }}
           />
           <Text style={styles.emptyTitle}>
-            {filter === 'done' ? 'No completed tasks yet' : 'No tasks yet'}
+            {filter === "done" ? "No completed tasks yet" : "No tasks yet"}
           </Text>
           <Text style={styles.emptyMessage}>
-            {filter === 'done'
-              ? 'Complete a task and it will appear here'
-              : 'Add a task above to get started 💊'}
+            {filter === "done"
+              ? "Complete a task and it will appear here"
+              : "Add a task above to get started 💊"}
           </Text>
         </View>
       ) : (
@@ -171,12 +184,21 @@ export default function TodosScreen() {
                 accessibilityState={{ checked: item.completed }}
               >
                 {item.completed && (
-                  <FontAwesome name="check" size={12} color={colors.textInverse} />
+                  <FontAwesome
+                    name="check"
+                    size={12}
+                    color={colors.textInverse}
+                  />
                 )}
               </Pressable>
 
               <View style={styles.taskTextContainer}>
-                <Text style={[styles.taskText, item.completed && styles.taskTextDone]}>
+                <Text
+                  style={[
+                    styles.taskText,
+                    item.completed && styles.taskTextDone,
+                  ]}
+                >
                   {item.task}
                 </Text>
                 {item.medicationName && (
@@ -185,7 +207,10 @@ export default function TodosScreen() {
               </View>
 
               <Pressable
-                style={({ pressed }) => [styles.deleteButton, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [
+                  styles.deleteButton,
+                  pressed && { opacity: 0.6 },
+                ]}
                 onPress={() => handleDelete(item._id, item.task)}
                 accessibilityRole="button"
                 accessibilityLabel="Delete task"
@@ -213,7 +238,7 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
     },
     headerTitle: {
       fontSize: 28,
-      fontWeight: '800',
+      fontWeight: "800",
       color: colors.text,
       letterSpacing: -0.8,
       marginBottom: 4,
@@ -224,7 +249,7 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       marginBottom: 16,
     },
     inputRow: {
-      flexDirection: 'row',
+      flexDirection: "row",
       paddingHorizontal: 20,
       gap: 10,
       marginBottom: 12,
@@ -242,8 +267,8 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       backgroundColor: colors.primary,
       borderRadius: 12,
       width: 50,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
       ...shadows.md,
     },
     addButtonPressed: {
@@ -251,7 +276,7 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       transform: [{ scale: 0.95 }],
     },
     filterRow: {
-      flexDirection: 'row',
+      flexDirection: "row",
       paddingHorizontal: 20,
       gap: 8,
       marginBottom: 8,
@@ -261,7 +286,7 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       paddingVertical: 10,
       borderRadius: 12,
       backgroundColor: colors.card,
-      alignItems: 'center',
+      alignItems: "center",
       ...shadows.sm,
     },
     filterChipActive: {
@@ -272,7 +297,7 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
     },
     filterText: {
       fontSize: 13,
-      fontWeight: '600',
+      fontWeight: "600",
       color: colors.textSecondary,
     },
     filterTextActive: {
@@ -284,8 +309,8 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       paddingBottom: 100,
     },
     todoItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
+      flexDirection: "row",
+      alignItems: "center",
       backgroundColor: colors.card,
       borderRadius: 14,
       padding: 14,
@@ -299,8 +324,8 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       borderRadius: 7,
       borderWidth: 2,
       borderColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
     },
     checkboxDone: {
       backgroundColor: colors.primary,
@@ -312,10 +337,10 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
     taskText: {
       fontSize: 15,
       color: colors.text,
-      fontWeight: '500',
+      fontWeight: "500",
     },
     taskTextDone: {
-      textDecorationLine: 'line-through',
+      textDecorationLine: "line-through",
       color: colors.textTertiary,
     },
     medBadge: {
@@ -328,21 +353,21 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
     },
     empty: {
       flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
+      alignItems: "center",
+      justifyContent: "center",
       paddingHorizontal: 40,
     },
     emptyTitle: {
       fontSize: 18,
-      fontWeight: '700',
+      fontWeight: "700",
       color: colors.text,
       marginBottom: 8,
-      textAlign: 'center',
+      textAlign: "center",
     },
     emptyMessage: {
       fontSize: 14,
       color: colors.textSecondary,
-      textAlign: 'center',
+      textAlign: "center",
       lineHeight: 20,
     },
   });

@@ -1,129 +1,82 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useRef } from 'react';
-import { ConvexProvider, ConvexReactClient } from 'convex/react';
-import { StatusBar } from 'expo-status-bar';
-import * as Notifications from 'expo-notifications';
-import { ThemeProvider, useTheme } from '@/hooks/useTheme';
-import { UserProvider } from '@/contexts/UserContext';
-import { registerForPushNotifications } from '@/lib/notifications';
+import { LightColors } from "@/constants/Colors";
+import { useAuth, UserProvider } from "@/contexts/UserContext";
+import { ThemeProvider } from "@/hooks/useTheme";
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
+import { ConvexReactClient } from "convex/react";
+import { router, Slot } from "expo-router";
+import { useEffect } from "react";
+import { ActivityIndicator, Platform, View } from "react-native";
 
-export { ErrorBoundary } from 'expo-router';
+const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
 
-export const unstable_settings = {
-  initialRouteName: '(tabs)',
-};
+//  Storage adapter
+// SecureStore is native-only — fall back to localStorage on web
+const secureStorage =
+  Platform.OS === "web"
+    ? {
+        getItem: (key: string) => Promise.resolve(localStorage.getItem(key)),
+        setItem: (key: string, value: string) =>
+          Promise.resolve(localStorage.setItem(key, value)),
+        removeItem: (key: string) =>
+          Promise.resolve(localStorage.removeItem(key)),
+      }
+    : (() => {
+        // Lazy require so web bundle never touches expo-secure-store
+        const SecureStore = require("expo-secure-store");
+        return {
+          getItem: (key: string) => SecureStore.getItemAsync(key),
+          setItem: (key: string, value: string) =>
+            SecureStore.setItemAsync(key, value),
+          removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+        };
+      })();
 
-SplashScreen.preventAutoHideAsync();
+//  Auth gate — reads auth state and routes accordingly
+function AuthGate() {
+  const { isAuthenticated, isLoading, user } = useAuth();
 
-// Initialize Convex client
-// The EXPO_PUBLIC_CONVEX_URL env var is set after running `npx convex dev`
-const convexUrl = process.env.EXPO_PUBLIC_CONVEX_URL;
-const convex = convexUrl ? new ConvexReactClient(convexUrl) : null;
-
-export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    ...FontAwesome.font,
-  });
-
-  const notificationListener = useRef<Notifications.Subscription | null>(null);
-  const responseListener = useRef<Notifications.Subscription | null>(null);
-
+  // Route based on auth state
   useEffect(() => {
-    // Push tokens not needed — we only use local scheduled notifications
-    // registerForPushNotifications();
+    if (isLoading) return;
 
-    notificationListener.current = Notifications.addNotificationReceivedListener(
-      (notification) => {
-        console.log('Notification received:', notification);
-      },
-    );
-
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        console.log('Notification tapped:', response);
-      },
-    );
-
-    return () => {
-      notificationListener.current?.remove();
-      responseListener.current?.remove();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
-
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
+    if (!isAuthenticated) {
+      router.replace("/(auth)/login");
+      return;
     }
-  }, [loaded]);
 
-  if (!loaded) {
-    return null;
+    if (!user) return; // still loading user record
+
+    // Patient or approved admin → main app
+    router.replace("/(tabs)");
+  }, [isAuthenticated, isLoading, user]);
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: LightColors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={LightColors.primary} />
+      </View>
+    );
   }
 
-  return (
-    <ThemeProvider>
-      <RootLayoutNav />
-    </ThemeProvider>
-  );
+  return <Slot />;
 }
 
-function RootLayoutNav() {
-  const { colors, isDark } = useTheme();
-
-  const content = (
-    <>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="admin/index" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="admin/[userId]"
-          options={{
-            title: 'User Details',
-            headerStyle: { backgroundColor: colors.background },
-            headerTitleStyle: { fontWeight: '700', fontSize: 17, color: colors.text },
-            headerTintColor: colors.primary,
-            headerShadowVisible: false,
-            headerShown: false,
-          }}
-        />
-        <Stack.Screen
-          name="results/[id]"
-          options={{
-            title: 'Scan Results',
-            headerBackTitle: 'Back',
-            headerStyle: {
-              backgroundColor: colors.background,
-            },
-            headerTitleStyle: {
-              fontWeight: '700',
-              fontSize: 17,
-              color: colors.text,
-            },
-            headerTintColor: colors.primary,
-            headerShadowVisible: false,
-          }}
-        />
-      </Stack>
-    </>
+//  Root
+export default function RootLayout() {
+  return (
+    <ConvexAuthProvider client={convex} storage={secureStorage}>
+      <ThemeProvider>
+        <UserProvider>
+          <AuthGate />
+        </UserProvider>
+      </ThemeProvider>
+    </ConvexAuthProvider>
   );
-
-  if (convex) {
-    return (
-      <ConvexProvider client={convex}>
-        <UserProvider>{content}</UserProvider>
-      </ConvexProvider>
-    );
-  }
-
-  // If Convex is not configured yet, render without provider
-  return content;
 }
