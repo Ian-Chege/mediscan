@@ -27,17 +27,17 @@ export function CameraCapture({ onImageCaptured, disabled }: CameraCaptureProps)
         }
       }
 
+      const pickerOptions: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ['images'],
+        quality: 0.7,
+        base64: true,
+        allowsEditing: true,
+        aspect: [4, 3],
+      };
+
       const result = useCamera
-        ? await ImagePicker.launchCameraAsync({
-            mediaTypes: ['images'],
-            quality: 0.8,
-            base64: true,
-          })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            quality: 0.8,
-            base64: true,
-          });
+        ? await ImagePicker.launchCameraAsync(pickerOptions)
+        : await ImagePicker.launchImageLibraryAsync(pickerOptions);
 
       if (!result.canceled && result.assets[0].base64) {
         onImageCaptured(result.assets[0].base64);

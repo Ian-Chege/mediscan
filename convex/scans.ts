@@ -29,6 +29,7 @@ export const save = mutation({
         dosage: v.string(),
         frequency: v.string(),
         confidence: v.optional(v.string()),
+        purpose: v.optional(v.string()),
       }),
     ),
     interactions: v.array(
@@ -40,10 +41,21 @@ export const save = mutation({
       }),
     ),
     explanation: v.string(),
+    imageStorageId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Deduplicate medications by name before saving
+    const seen = new Set<string>();
+    const uniqueMedications = args.extractedMedications.filter((med) => {
+      const key = med.name.toLowerCase().trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
     return await ctx.db.insert("scans", {
       ...args,
+      extractedMedications: uniqueMedications,
       scannedAt: Date.now(),
     });
   },
