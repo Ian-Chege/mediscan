@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx expo:*)",
-      "Bash(npx convex:*)"
+      "Bash(npx convex:*)",
+      "Bash(cd C:/Users/mulii/mediscan && npx tsc --noEmit 2>&1)"
     ]
   }
 }

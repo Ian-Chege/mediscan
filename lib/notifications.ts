@@ -3,14 +3,16 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 export async function registerForPushNotifications(): Promise<string | null> {
   // Push tokens only work on physical devices with a development build,
@@ -77,6 +79,11 @@ export async function scheduleMedicationReminder(
   hour: number,
   minute: number,
 ): Promise<string> {
+  if (Platform.OS === 'web') {
+    console.log(`[web] Reminder scheduled for ${medicationName} at ${hour}:${minute} (notifications not supported in browser)`);
+    return `web-${Date.now()}`;
+  }
+
   const id = await Notifications.scheduleNotificationAsync({
     content: {
       title: 'Time for your medication',
@@ -95,6 +102,7 @@ export async function scheduleMedicationReminder(
 }
 
 export async function cancelReminder(notificationId: string): Promise<void> {
+  if (Platform.OS === 'web') return;
   await Notifications.cancelScheduledNotificationAsync(notificationId);
 }
 

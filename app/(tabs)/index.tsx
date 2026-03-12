@@ -8,7 +8,6 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
-  Alert,
   FlatList,
   Keyboard,
   Pressable,
@@ -44,6 +43,14 @@ export default function ScanScreen() {
   const [processingStep, setProcessingStep] = useState("");
   const [prescriptionText, setPrescriptionText] = useState("");
   const [conditionText, setConditionText] = useState("");
+  const [ageText, setAgeText] = useState("");
+  const [allergiesText, setAllergiesText] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const showError = useCallback((msg: string) => {
+    setErrorMsg(msg);
+    setTimeout(() => setErrorMsg(""), 5000);
+  }, []);
 
   const extractMedications =
     api && useAction ? useAction(api.ai.extractMedications) : null;
@@ -70,33 +77,31 @@ export default function ScanScreen() {
         )
       : undefined;
 
-  // Shared logic: take extracted meds → check interactions → get explanation → navigate
   const processExtracted = useCallback(
-    async (extracted: any) => {
+    async (extracted: any, overrideCondition?: string) => {
       if (extracted.error) {
-        Alert.alert("Error", extracted.error);
+        showError(extracted.error);
         return;
       }
 
       if (!extracted.medications || extracted.medications.length === 0) {
-        Alert.alert(
-          "No Medications Found",
+        showError(
           "Could not identify any medications. Try again with more detail.",
         );
         return;
       }
 
-      // Check interactions
       setProcessingStep("Checking for interactions...");
       const newMedNames = extracted.medications.map((m: any) => m.name);
       const existingMedNames = (activeMeds ?? []).map((m: any) => m.name);
-      const interactions = await checkInteractions({
-        medications: newMedNames,
-        existingMedications: existingMedNames,
-      });
+      const interactions = checkInteractions
+        ? await checkInteractions({
+            medications: newMedNames,
+            existingMedications: existingMedNames,
+          })
+        : [];
 
-      // Check condition safety if user provided a condition
-      const condition = conditionText.trim();
+      const condition = overrideCondition ?? conditionText.trim();
       let conditionData = null;
       if (condition && checkConditionSafety) {
         setProcessingStep("Checking medication safety for your condition...");
@@ -106,7 +111,6 @@ export default function ScanScreen() {
         });
       }
 
-      // Generate explanation
       setProcessingStep("Preparing explanation...");
       const explanationArgs: any = {
         medications: extracted.medications.map((m: any) => ({
@@ -116,15 +120,16 @@ export default function ScanScreen() {
         })),
         interactions,
       };
-      if (condition) {
-        explanationArgs.condition = condition;
-      }
-      if (conditionData) {
-        explanationArgs.conditionData = conditionData;
-      }
-      const explanation = await generateExplanation(explanationArgs);
+      if (condition) explanationArgs.condition = condition;
+      if (conditionData) explanationArgs.conditionData = conditionData;
+      if (ageText.trim()) explanationArgs.age = ageText.trim();
+      if (allergiesText.trim())
+        explanationArgs.allergies = allergiesText.trim();
 
-      // Save and navigate
+      const explanation = generateExplanation
+        ? await generateExplanation(explanationArgs)
+        : null;
+
       if (userId && saveScan) {
         setProcessingStep("Saving results...");
         const saveArgs: any = {
@@ -133,9 +138,7 @@ export default function ScanScreen() {
           interactions,
           explanation: explanation ?? "No explanation available.",
         };
-        if (condition) {
-          saveArgs.condition = condition;
-        }
+        if (condition) saveArgs.condition = condition;
         const scanId = await saveScan(saveArgs);
         router.push(`/results/${scanId}`);
       } else {
@@ -163,16 +166,17 @@ export default function ScanScreen() {
       saveScan,
       activeMeds,
       conditionText,
+      ageText,
+      allergiesText,
+      showError,
     ],
   );
 
-  // Handle image scan
   const handleImageCaptured = useCallback(
     async (base64: string) => {
       if (!extractMedications) {
-        Alert.alert(
-          "Setup Required",
-          "Connect Convex and set your OpenAI API key to enable scanning.",
+        showError(
+          "Setup required: Connect Convex and set your OpenAI API key to enable scanning.",
         );
         return;
       }
@@ -183,30 +187,23 @@ export default function ScanScreen() {
         await processExtracted(extracted);
       } catch (error) {
         console.error("Scan error:", error);
-        Alert.alert("Scan Failed", "Something went wrong. Please try again.");
+        showError("Scan failed. Please try again.");
       } finally {
         setIsProcessing(false);
         setProcessingStep("");
       }
     },
-    [extractMedications, processExtracted],
+    [extractMedications, processExtracted, showError],
   );
 
-  // Handle text lookup
   const handleTextLookup = useCallback(async () => {
     const text = prescriptionText.trim();
     if (!text) {
-      Alert.alert(
-        "Enter a Prescription",
-        'Type a medication, e.g. "Bruffen 1x3"',
-      );
+      showError('Type a medication first, e.g. "Bruffen 1x3"');
       return;
     }
     if (!extractFromText) {
-      Alert.alert(
-        "Setup Required",
-        "Connect Convex and set your OpenAI API key to enable lookups.",
-      );
+      showError("Setup required: Connect Convex and set your OpenAI API key.");
       return;
     }
 
@@ -219,25 +216,23 @@ export default function ScanScreen() {
       setPrescriptionText("");
     } catch (error) {
       console.error("Lookup error:", error);
-      Alert.alert("Lookup Failed", "Something went wrong. Please try again.");
+      showError(
+        `Lookup failed: ${error instanceof Error ? error.message : "Please try again."}`,
+      );
     } finally {
       setIsProcessing(false);
       setProcessingStep("");
     }
-  }, [prescriptionText, extractFromText, processExtracted]);
+  }, [prescriptionText, extractFromText, processExtracted, showError]);
 
-  // Handle condition-based drug suggestion
   const handleConditionSuggest = useCallback(async () => {
     const condition = conditionText.trim();
     if (!condition) {
-      Alert.alert("Enter a Condition", "Describe what you are suffering from.");
+      showError('Describe your condition first, e.g. "headache" or "flu"');
       return;
     }
     if (!suggestForCondition) {
-      Alert.alert(
-        "Setup Required",
-        "Connect Convex and set your OpenAI API key to enable suggestions.",
-      );
+      showError("Setup required: Connect Convex and set your OpenAI API key.");
       return;
     }
 
@@ -246,18 +241,17 @@ export default function ScanScreen() {
     try {
       setProcessingStep("Finding medications for your condition...");
       const extracted = await suggestForCondition({ condition });
-      await processExtracted(extracted);
+      await processExtracted(extracted, condition);
     } catch (error) {
       console.error("Suggestion error:", error);
-      Alert.alert(
-        "Suggestion Failed",
-        "Something went wrong. Please try again.",
+      showError(
+        `Suggestion failed: ${error instanceof Error ? error.message : "Please try again."}`,
       );
     } finally {
       setIsProcessing(false);
       setProcessingStep("");
     }
-  }, [conditionText, suggestForCondition, processExtracted]);
+  }, [conditionText, suggestForCondition, processExtracted, showError]);
 
   if (isProcessing) {
     return <LoadingSpinner message={processingStep} />;
@@ -311,15 +305,29 @@ export default function ScanScreen() {
           </View>
         </View>
 
-        {/* Scan options — camera & gallery side by side */}
+        {/* Inline error banner */}
+        {errorMsg ? (
+          <View style={styles.errorBanner}>
+            <FontAwesome
+              name="exclamation-circle"
+              size={14}
+              color="#fff"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.errorBannerText}>{errorMsg}</Text>
+          </View>
+        ) : null}
+
+        {/* Scan options */}
         <Text style={styles.sectionLabel}>Scan a Prescription</Text>
         <CameraCapture onImageCaptured={handleImageCaptured} />
 
-        {/* Condition input */}
+        {/* Patient profile — condition, age, allergies */}
         <View style={styles.conditionSection}>
-          <Text style={styles.conditionLabel}>
-            What are you suffering from?
-          </Text>
+          <Text style={styles.conditionLabel}>Your Profile</Text>
+
+          {/* Condition */}
+          <Text style={styles.profileFieldLabel}>Condition / Symptoms</Text>
           <View style={styles.conditionInputRow}>
             <View style={styles.conditionInputContainer}>
               <FontAwesome
@@ -352,19 +360,77 @@ export default function ScanScreen() {
               style={({ pressed }) => [
                 styles.suggestButton,
                 !conditionText.trim() && styles.suggestButtonDisabled,
-                pressed && conditionText.trim() && styles.suggestButtonPressed,
+                pressed && styles.suggestButtonPressed,
               ]}
               onPress={handleConditionSuggest}
-              disabled={!conditionText.trim()}
               accessibilityRole="button"
               accessibilityLabel="Get drug suggestions"
             >
               <FontAwesome name="search" size={16} color={colors.textInverse} />
             </Pressable>
           </View>
+
+          {/* Age */}
+          <Text style={styles.profileFieldLabel}>Age</Text>
+          <View style={styles.profileInputContainer}>
+            <FontAwesome
+              name="user"
+              size={14}
+              color={colors.textTertiary}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={styles.conditionInput}
+              value={ageText}
+              onChangeText={setAgeText}
+              placeholder='e.g. "15 years old", "45"'
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="done"
+              accessibilityLabel="Enter your age"
+            />
+            {ageText.length > 0 && (
+              <Pressable onPress={() => setAgeText("")} hitSlop={8}>
+                <FontAwesome
+                  name="times-circle"
+                  size={16}
+                  color={colors.textTertiary}
+                />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Allergies */}
+          <Text style={styles.profileFieldLabel}>Known Allergies</Text>
+          <View style={styles.profileInputContainer}>
+            <FontAwesome
+              name="exclamation-triangle"
+              size={13}
+              color={colors.textTertiary}
+              style={styles.inputIcon}
+            />
+            <TextInput
+              style={styles.conditionInput}
+              value={allergiesText}
+              onChangeText={setAllergiesText}
+              placeholder='e.g. "Penicillin, dairy, peanuts"'
+              placeholderTextColor={colors.textTertiary}
+              returnKeyType="done"
+              accessibilityLabel="Enter your known allergies"
+            />
+            {allergiesText.length > 0 && (
+              <Pressable onPress={() => setAllergiesText("")} hitSlop={8}>
+                <FontAwesome
+                  name="times-circle"
+                  size={16}
+                  color={colors.textTertiary}
+                />
+              </Pressable>
+            )}
+          </View>
+
           <Text style={styles.conditionHint}>
-            Get drug suggestions, or leave filled when scanning a prescription
-            to check safety
+            Fill in your profile to get personalised safety warnings when
+            scanning
           </Text>
         </View>
 
@@ -399,10 +465,9 @@ export default function ScanScreen() {
             style={({ pressed }) => [
               styles.searchButton,
               !prescriptionText.trim() && styles.searchButtonDisabled,
-              pressed && prescriptionText.trim() && styles.searchButtonPressed,
+              pressed && styles.searchButtonPressed,
             ]}
             onPress={handleTextLookup}
-            disabled={!prescriptionText.trim()}
             accessibilityRole="button"
             accessibilityLabel="Search prescription"
           >
@@ -486,13 +551,8 @@ export default function ScanScreen() {
 
 function createStyles(colors: AppColors, shadows: AppShadows) {
   return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    scrollContent: {
-      paddingBottom: 32,
-    },
+    container: { flex: 1, backgroundColor: colors.background },
+    scrollContent: { paddingBottom: 32 },
     header: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -501,22 +561,30 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       paddingTop: 8,
       paddingBottom: 24,
     },
-    greeting: {
-      fontSize: 14,
-      color: colors.textSecondary,
-      fontWeight: "500",
+    errorBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.danger,
+      marginHorizontal: 20,
+      marginBottom: 12,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
     },
+    errorBannerText: {
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: "500",
+      flex: 1,
+    },
+    greeting: { fontSize: 14, color: colors.textSecondary, fontWeight: "500" },
     brand: {
       fontSize: 28,
       fontWeight: "800",
       color: colors.text,
       letterSpacing: -0.8,
     },
-    headerActions: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 10,
-    },
+    headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
     themeToggle: {
       width: 44,
       height: 44,
@@ -541,20 +609,29 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       marginBottom: 12,
       letterSpacing: -0.2,
     },
-    conditionSection: {
-      paddingHorizontal: 20,
-      marginTop: 20,
-    },
+    conditionSection: { paddingHorizontal: 20, marginTop: 20 },
     conditionLabel: {
-      fontSize: 14,
-      fontWeight: "600",
+      fontSize: 15,
+      fontWeight: "700",
       color: colors.text,
-      marginBottom: 8,
+      marginBottom: 12,
     },
-    conditionInputRow: {
+    profileFieldLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: colors.textSecondary,
+      marginBottom: 6,
+      marginTop: 10,
+    },
+    profileInputContainer: {
       flexDirection: "row",
-      gap: 10,
+      alignItems: "center",
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      ...shadows.sm,
     },
+    conditionInputRow: { flexDirection: "row", gap: 10 },
     conditionInputContainer: {
       flex: 1,
       flexDirection: "row",
@@ -583,10 +660,7 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       backgroundColor: colors.textTertiary,
       ...shadows.sm,
     },
-    suggestButtonPressed: {
-      opacity: 0.85,
-      transform: [{ scale: 0.95 }],
-    },
+    suggestButtonPressed: { opacity: 0.85, transform: [{ scale: 0.95 }] },
     conditionHint: {
       fontSize: 12,
       color: colors.textTertiary,
@@ -599,22 +673,14 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       paddingHorizontal: 20,
       marginVertical: 20,
     },
-    dividerLine: {
-      flex: 1,
-      height: 1,
-      backgroundColor: colors.border,
-    },
+    dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
     dividerText: {
       marginHorizontal: 14,
       fontSize: 13,
       color: colors.textTertiary,
       fontWeight: "500",
     },
-    inputWrapper: {
-      flexDirection: "row",
-      gap: 10,
-      paddingHorizontal: 20,
-    },
+    inputWrapper: { flexDirection: "row", gap: 10, paddingHorizontal: 20 },
     inputContainer: {
       flex: 1,
       flexDirection: "row",
@@ -624,15 +690,8 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       paddingHorizontal: 14,
       ...shadows.sm,
     },
-    inputIcon: {
-      marginRight: 10,
-    },
-    input: {
-      flex: 1,
-      paddingVertical: 14,
-      fontSize: 15,
-      color: colors.text,
-    },
+    inputIcon: { marginRight: 10 },
+    input: { flex: 1, paddingVertical: 14, fontSize: 15, color: colors.text },
     searchButton: {
       width: 50,
       height: 50,
@@ -650,9 +709,7 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       backgroundColor: colors.primaryDark,
       transform: [{ scale: 0.95 }],
     },
-    recentSection: {
-      marginTop: 28,
-    },
+    recentSection: { marginTop: 28 },
     recentEmpty: {
       flexDirection: "row",
       alignItems: "center",
@@ -671,11 +728,7 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       justifyContent: "center",
       alignItems: "center",
     },
-    recentEmptyText: {
-      fontSize: 14,
-      color: colors.textTertiary,
-      flex: 1,
-    },
+    recentEmptyText: { fontSize: 14, color: colors.textTertiary, flex: 1 },
     scanCard: {
       backgroundColor: colors.card,
       borderRadius: 14,
@@ -700,10 +753,7 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       color: colors.text,
       letterSpacing: -0.3,
     },
-    scanCardDate: {
-      fontSize: 11,
-      color: colors.textTertiary,
-    },
+    scanCardDate: { fontSize: 11, color: colors.textTertiary },
     disclaimer: {
       textAlign: "center",
       color: colors.textTertiary,

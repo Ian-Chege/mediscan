@@ -1,15 +1,17 @@
 import { LightColors } from "@/constants/Colors";
 import { useAuth, UserProvider } from "@/contexts/UserContext";
 import { ThemeProvider } from "@/hooks/useTheme";
+import { registerForPushNotifications } from "@/lib/notifications";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
+import * as Notifications from "expo-notifications";
 import { router, Slot } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { ActivityIndicator, Platform, View } from "react-native";
 
 const convex = new ConvexReactClient(process.env.EXPO_PUBLIC_CONVEX_URL!);
 
-//  Storage adapter
+// Storage adapter
 // SecureStore is native-only — fall back to localStorage on web
 const secureStorage =
   Platform.OS === "web"
@@ -21,7 +23,6 @@ const secureStorage =
           Promise.resolve(localStorage.removeItem(key)),
       }
     : (() => {
-        // Lazy require so web bundle never touches expo-secure-store
         const SecureStore = require("expo-secure-store");
         return {
           getItem: (key: string) => SecureStore.getItemAsync(key),
@@ -31,9 +32,29 @@ const secureStorage =
         };
       })();
 
-//  Auth gate — reads auth state and routes accordingly
+// Auth gate — reads auth state and routes accordingly
 function AuthGate() {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const notificationListener = useRef<any>();
+  const responseListener = useRef<any>();
+
+  // Register for push notifications on mount
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      registerForPushNotifications();
+
+      notificationListener.current =
+        Notifications.addNotificationReceivedListener(() => {});
+
+      responseListener.current =
+        Notifications.addNotificationResponseReceivedListener(() => {});
+
+      return () => {
+        notificationListener.current?.remove();
+        responseListener.current?.remove();
+      };
+    }
+  }, []);
 
   // Route based on auth state
   useEffect(() => {
@@ -44,9 +65,8 @@ function AuthGate() {
       return;
     }
 
-    if (!user) return; // still loading user record
+    if (!user) return;
 
-    // Patient or approved admin → main app
     router.replace("/(tabs)");
   }, [isAuthenticated, isLoading, user]);
 
@@ -68,7 +88,7 @@ function AuthGate() {
   return <Slot />;
 }
 
-//  Root
+// Root
 export default function RootLayout() {
   return (
     <ConvexAuthProvider client={convex} storage={secureStorage}>
