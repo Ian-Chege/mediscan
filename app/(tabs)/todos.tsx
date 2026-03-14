@@ -1,6 +1,7 @@
 import type { AppShadows } from "@/constants/Colors";
 import { useUser } from "@/contexts/UserContext";
 import { AppColors, useTheme } from "@/hooks/useTheme";
+import { formatTime12h } from "@/lib/scheduleCalculator";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -9,9 +10,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { cancelReminder } from "@/lib/notifications";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 let useMutation: any, useQuery: any, api: any;
@@ -32,32 +34,28 @@ export default function TodosScreen() {
     [colors, shadows],
   );
 
-  const [task, setTask] = useState("");
   const [filter, setFilter] = useState<"all" | "pending" | "done">("all");
 
-  const todos =
+  const today = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  }, []);
+
+  const scheduledTodos =
     api && useQuery
-      ? useQuery(api.todos.list, userId ? { userId: userId as any } : "skip")
+      ? useQuery(
+          api.todos.listByDate,
+          userId ? { userId: userId as any, date: today } : "skip",
+        )
       : undefined;
 
-  const addTodo = api && useMutation ? useMutation(api.todos.add) : null;
-  const toggleComplete =
-    api && useMutation ? useMutation(api.todos.toggleComplete) : null;
+  const toggleScheduled =
+    api && useMutation ? useMutation(api.todos.toggleScheduled) : null;
   const removeTodo = api && useMutation ? useMutation(api.todos.remove) : null;
-
-  const handleAdd = useCallback(async () => {
-    if (!task.trim() || !userId || !addTodo) return;
-    try {
-      await addTodo({ userId: userId as any, task: task.trim() });
-      setTask("");
-    } catch {
-      Alert.alert("Error", "Failed to add task.");
-    }
-  }, [task, userId, addTodo]);
 
   const handleDelete = useCallback(
     (id: any, taskName: string) => {
-      Alert.alert("Remove Task", `Remove "${taskName}"?`, [
+      Alert.alert("Remove", `Remove "${taskName}"?`, [
         { text: "Cancel", style: "cancel" },
         {
           text: "Remove",
@@ -75,58 +73,96 @@ export default function TodosScreen() {
     [removeTodo],
   );
 
-  const handleToggle = useCallback(
-    async (id: any) => {
+  // Compute isMissed client-side using local time
+  const computeIsMissed = useCallback((todo: any): boolean => {
+    if (!todo.scheduledTime || !todo.scheduledDate || todo.status !== "pending")
+      return false;
+    const [h, m] = todo.scheduledTime.split(":").map(Number);
+    const scheduled = new Date(
+      parseInt(todo.scheduledDate.slice(0, 4)),
+      parseInt(todo.scheduledDate.slice(5, 7)) - 1,
+      parseInt(todo.scheduledDate.slice(8, 10)),
+      h,
+      m,
+    );
+    return Date.now() - scheduled.getTime() > 2 * 60 * 60 * 1000;
+  }, []);
+
+  const handleScheduledToggle = useCallback(
+    async (item: any) => {
+      const missed = computeIsMissed(item);
+      if (missed) return;
       try {
-        await toggleComplete?.({ id });
-      } catch {
-        Alert.alert("Error", "Failed to update task.");
+        const nextStatus =
+          item.status === "pending"
+            ? "done"
+            : item.status === "done"
+              ? "skipped"
+              : "pending";
+        await toggleScheduled?.({
+          id: item._id,
+          newStatus: nextStatus,
+          isMissed: missed,
+        });
+
+        // Cancel pending follow-up notification when dose is marked done
+        if (nextStatus === "done" && item.medicationName) {
+          const key = `followup:${item.medicationName}`;
+          const followUpId = await AsyncStorage.getItem(key);
+          if (followUpId) {
+            await cancelReminder(followUpId);
+            await AsyncStorage.removeItem(key);
+          }
+        }
+      } catch (err: any) {
+        Alert.alert("Error", err?.message || "Failed to update task.");
       }
     },
-    [toggleComplete],
+    [toggleScheduled, computeIsMissed],
   );
 
-  const filtered = (todos ?? []).filter((t: any) => {
-    if (filter === "pending") return !t.completed;
-    if (filter === "done") return t.completed;
-    return true;
-  });
+  // Enrich with client-side isMissed, then filter
+  const displayList = useMemo(() => {
+    const enriched = (scheduledTodos ?? [])
+      .map((t: any) => ({
+        ...t,
+        isMissed: computeIsMissed(t),
+      }))
+      .sort((a: any, b: any) =>
+        (a.scheduledTime ?? "").localeCompare(b.scheduledTime ?? ""),
+      );
 
-  const pending = (todos ?? []).filter((t: any) => !t.completed).length;
-  const done = (todos ?? []).filter((t: any) => t.completed).length;
+    if (filter === "pending")
+      return enriched.filter((t: any) => !t.completed && !t.isMissed);
+    if (filter === "done")
+      return enriched.filter((t: any) => t.completed || t.status === "skipped");
+    return enriched;
+  }, [filter, scheduledTodos, computeIsMissed]);
+
+  const pending = displayList.filter(
+    (t: any) => t.status === "pending" && !t.isMissed,
+  ).length;
+  const done = displayList.filter(
+    (t: any) => t.status === "done" || t.status === "skipped",
+  ).length;
+  const missed = displayList.filter((t: any) => t.isMissed).length;
+
+  // Build subtitle
+  const subtitleParts: string[] = [];
+  if (pending > 0) subtitleParts.push(`${pending} pending`);
+  if (done > 0) subtitleParts.push(`${done} done`);
+  if (missed > 0) subtitleParts.push(`${missed} missed`);
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>To-Do List</Text>
+        <Text style={styles.headerTitle}>My Day</Text>
         <Text style={styles.headerSub}>
-          {pending} pending · {done} done
+          {subtitleParts.length > 0
+            ? subtitleParts.join(" · ")
+            : "No doses scheduled"}
         </Text>
-      </View>
-
-      {/* Input Row */}
-      <View style={styles.inputRow}>
-        <TextInput
-          style={styles.input}
-          placeholder="Add a task e.g. Take Amoxicillin after lunch"
-          placeholderTextColor={colors.textTertiary}
-          value={task}
-          onChangeText={setTask}
-          onSubmitEditing={handleAdd}
-          returnKeyType="done"
-        />
-        <Pressable
-          style={({ pressed }) => [
-            styles.addButton,
-            pressed && styles.addButtonPressed,
-          ]}
-          onPress={handleAdd}
-          accessibilityRole="button"
-          accessibilityLabel="Add task"
-        >
-          <FontAwesome name="plus" size={20} color={colors.textInverse} />
-        </Pressable>
       </View>
 
       {/* Filter Tabs */}
@@ -156,76 +192,113 @@ export default function TodosScreen() {
       </View>
 
       {/* List */}
-      {filtered.length === 0 ? (
+      {displayList.length === 0 ? (
         <View style={styles.empty}>
           <FontAwesome
-            name="check-square-o"
+            name="calendar-check-o"
             size={48}
             color={colors.textTertiary}
             style={{ marginBottom: 16 }}
           />
           <Text style={styles.emptyTitle}>
-            {filter === "done" ? "No completed tasks yet" : "No tasks yet"}
+            {filter === "done"
+              ? "No completed doses yet"
+              : "No doses scheduled today"}
           </Text>
           <Text style={styles.emptyMessage}>
             {filter === "done"
-              ? "Complete a task and it will appear here"
-              : "Add a task above to get started 💊"}
+              ? "Mark a dose as done and it will appear here"
+              : "Scan a prescription and save with a schedule to see your doses here"}
           </Text>
         </View>
       ) : (
         <FlatList
-          data={filtered}
+          data={displayList}
           keyExtractor={(item: any) => item._id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }: any) => (
-            <View style={styles.todoItem}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.checkbox,
-                  item.completed && styles.checkboxDone,
-                  pressed && { opacity: 0.7 },
-                ]}
-                onPress={() => handleToggle(item._id)}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: item.completed }}
-              >
-                {item.completed && (
-                  <FontAwesome
-                    name="check"
-                    size={12}
-                    color={colors.textInverse}
-                  />
-                )}
-              </Pressable>
+          renderItem={({ item }: any) => {
+            const isMissed = item.isMissed;
+            const isSkipped = item.status === "skipped";
+            const isDone = item.status === "done";
 
-              <View style={styles.taskTextContainer}>
-                <Text
-                  style={[
-                    styles.taskText,
-                    item.completed && styles.taskTextDone,
+            return (
+              <View
+                style={[styles.todoItem, isMissed && styles.todoItemMissed]}
+              >
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.checkbox,
+                    isDone && styles.checkboxDone,
+                    isSkipped && styles.checkboxSkipped,
+                    isMissed && styles.checkboxMissed,
+                    pressed && !isMissed && { opacity: 0.7 },
                   ]}
+                  onPress={() => handleScheduledToggle(item)}
+                  disabled={isMissed}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: isDone }}
                 >
-                  {item.task}
-                </Text>
-                {item.medicationName && (
-                  <Text style={styles.medBadge}>💊 {item.medicationName}</Text>
-                )}
-              </View>
+                  {isDone && (
+                    <FontAwesome
+                      name="check"
+                      size={12}
+                      color={colors.textInverse}
+                    />
+                  )}
+                  {isSkipped && (
+                    <FontAwesome
+                      name="forward"
+                      size={10}
+                      color={colors.textInverse}
+                    />
+                  )}
+                </Pressable>
 
-              <Pressable
-                style={({ pressed }) => [
-                  styles.deleteButton,
-                  pressed && { opacity: 0.6 },
-                ]}
-                onPress={() => handleDelete(item._id, item.task)}
-                accessibilityRole="button"
-                accessibilityLabel="Delete task"
-              >
-                <FontAwesome name="trash" size={18} color="#ef4444" />
-              </Pressable>
-            </View>
-          )}
+                <View style={styles.taskTextContainer}>
+                  <View style={styles.taskTopRow}>
+                    <Text
+                      style={[
+                        styles.taskText,
+                        isDone && styles.taskTextDone,
+                        isMissed && styles.taskTextMissed,
+                      ]}
+                    >
+                      {item.task}
+                    </Text>
+                    {isMissed && (
+                      <View style={styles.missedBadge}>
+                        <Text style={styles.missedBadgeText}>MISSED</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.taskMeta}>
+                    {item.scheduledTime && (
+                      <Text style={styles.timeBadge}>
+                        {formatTime12h(item.scheduledTime)}
+                      </Text>
+                    )}
+                    {item.medicationName && (
+                      <Text style={styles.medBadge}>
+                        {item.medicationName}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.deleteButton,
+                    pressed && { opacity: 0.6 },
+                  ]}
+                  onPress={() => handleDelete(item._id, item.task)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Delete task"
+                >
+                  <FontAwesome name="trash" size={18} color="#ef4444" />
+                </Pressable>
+              </View>
+            );
+          }}
         />
       )}
     </SafeAreaView>
@@ -241,7 +314,7 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
     header: {
       paddingHorizontal: 20,
       paddingTop: 8,
-      paddingBottom: 4,
+      paddingBottom: 12,
     },
     headerTitle: {
       fontSize: 28,
@@ -253,34 +326,6 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
     headerSub: {
       fontSize: 14,
       color: colors.textSecondary,
-      marginBottom: 16,
-    },
-    inputRow: {
-      flexDirection: "row",
-      paddingHorizontal: 20,
-      gap: 10,
-      marginBottom: 12,
-    },
-    input: {
-      flex: 1,
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      padding: 14,
-      fontSize: 15,
-      color: colors.text,
-      ...shadows.sm,
-    },
-    addButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      width: 50,
-      alignItems: "center",
-      justifyContent: "center",
-      ...shadows.md,
-    },
-    addButtonPressed: {
-      backgroundColor: colors.primaryDark,
-      transform: [{ scale: 0.95 }],
     },
     filterRow: {
       flexDirection: "row",
@@ -325,6 +370,10 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       gap: 12,
       ...shadows.sm,
     },
+    todoItemMissed: {
+      borderWidth: 1,
+      borderColor: colors.danger + "30",
+    },
     checkbox: {
       width: 24,
       height: 24,
@@ -338,22 +387,60 @@ function createStyles(colors: AppColors, shadows: AppShadows) {
       backgroundColor: colors.primary,
       borderColor: colors.primary,
     },
+    checkboxSkipped: {
+      backgroundColor: colors.textTertiary,
+      borderColor: colors.textTertiary,
+    },
+    checkboxMissed: {
+      borderColor: colors.danger,
+      opacity: 0.5,
+    },
     taskTextContainer: {
       flex: 1,
+      gap: 3,
+    },
+    taskTopRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
     },
     taskText: {
       fontSize: 15,
       color: colors.text,
       fontWeight: "500",
+      flexShrink: 1,
     },
     taskTextDone: {
       textDecorationLine: "line-through",
       color: colors.textTertiary,
     },
+    taskTextMissed: {
+      color: colors.danger,
+    },
+    taskMeta: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    timeBadge: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: colors.secondary,
+    },
     medBadge: {
       fontSize: 12,
       color: colors.primary,
-      marginTop: 3,
+    },
+    missedBadge: {
+      backgroundColor: colors.dangerSoft,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4,
+    },
+    missedBadgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: colors.danger,
     },
     deleteButton: {
       padding: 6,

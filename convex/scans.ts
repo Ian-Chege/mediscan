@@ -48,6 +48,8 @@ export const save = mutation({
   args: {
     userId: v.id("users"),
     condition: v.optional(v.string()),
+    age: v.optional(v.string()),
+    allergies: v.optional(v.string()),
     extractedMedications: v.array(
       v.object({
         name: v.string(),
@@ -66,7 +68,9 @@ export const save = mutation({
       }),
     ),
     explanation: v.string(),
-    imageStorageId: v.optional(v.string()),
+    recommendation: v.optional(v.string()),
+    tips: v.optional(v.array(v.string())),
+    imageStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const callerId = await getAuthUserId(ctx);

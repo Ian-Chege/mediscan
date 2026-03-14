@@ -259,19 +259,22 @@ If the image is not a prescription, return: { "medications": [], "error": "Not a
 export const extractFromText = action({
   args: {
     prescriptionText: v.string(),
+    age: v.optional(v.string()),
   },
-  handler: async (_ctx, { prescriptionText }) => {
+  handler: async (_ctx, { prescriptionText, age }) => {
+    const ageContext = age ? `\nPATIENT AGE: ${age}. If the dosage is not explicitly specified in the input, use age-appropriate dosing. For patients under 18, use pediatric doses — never default to adult doses.` : '';
+
     const content = await chatCompletion(
       "gpt-4o",
       [
         {
           role: "system",
           content: `You are a medical prescription parser and pharmacist assistant. Users will type shorthand prescriptions like "Bruffen 1x3" or "Amoxicillin 500mg twice daily".
-
+${ageContext}
 Your job is to:
 1. Identify the medication (use the correct generic/brand name)
 2. Parse the dosage — "1x3" means "1 tablet, 3 times daily"
-3. Determine the standard dosage form if not specified (e.g., Brufen is typically 400mg or 600mg tablets)
+3. Determine the standard dosage form if not specified (e.g., Brufen is typically 400mg or 600mg tablets). If patient age is provided, adjust to age-appropriate dosing
 4. Rate confidence based on how clear the input is
 
 Return ONLY valid JSON in this exact format:
@@ -303,45 +306,115 @@ If the input doesn't look like a medication, return: { "medications": [], "error
 export const suggestForCondition = action({
   args: {
     condition: v.string(),
+    age: v.optional(v.string()),
+    allergies: v.optional(v.string()),
   },
-  handler: async (_ctx, { condition }) => {
+  handler: async (_ctx, { condition, age, allergies }) => {
+    const patientAge = age ? parseInt(age, 10) : null;
+    const isChild = patientAge !== null && patientAge < 18;
+    const patientContext = [
+      age ? `Patient age: ${age}` : null,
+      allergies ? `Known allergies: ${allergies}` : null,
+    ].filter(Boolean).join('. ');
+
     const content = await chatCompletion(
-      "gpt-4o-mini",
+      "gpt-4o",
       [
         {
           role: "system",
-          content: `You are a knowledgeable pharmacist assistant. A patient will describe their condition or symptoms. Suggest commonly used medications for that condition.
+          content: `You are a licensed pharmacist giving a complete OTC medication recommendation. The patient describes their symptoms and you must address EVERY symptom with specific medications that work well together.
 
-IMPORTANT RULES:
-- Suggest 2-5 medications that are commonly used for this condition
-- Include both brand name and generic name where applicable
-- Include standard adult dosages and typical frequency
-- Focus on commonly available, well-known medications (OTC first, then common prescription)
-- Set confidence to "medium" for all suggestions (since these are general recommendations, not a prescription)
-- DO NOT suggest controlled substances or high-risk medications
-- Always include a note reminding the patient to consult a doctor
+## CORE RULES
+1. Address EVERY symptom individually — do NOT recommend just one medication for multiple symptoms unless it genuinely covers all of them
+2. Recommend medications that are safe to combine. If two medications should not be taken together, do NOT recommend both — pick one and explain
+3. For each medication: state which specific symptom it treats in the "purpose" field
+4. Check all recommendations against the patient's allergies before including them
+5. Only recommend OTC medications — never prescription drugs or controlled substances
+6. Include practical combination instructions (e.g., "Take ibuprofen and cetirizine together — they are safe to combine")
+7. Set confidence to "high" for first-line medications, "medium" for alternatives
+
+## DOSING
+${isChild ? `PEDIATRIC PATIENT (age ${age}):
+- Ibuprofen: 5-10mg/kg per dose, max 3x/day
+- Acetaminophen: 10-15mg/kg per dose, max 4x/day
+- NEVER give aspirin to patients under 18
+- NEVER give Dextromethorphan to patients under 6
+- NEVER give Loperamide or Pseudoephedrine to patients under 12
+- Use weight-based dosing. If weight unknown, use conservative lower bound for age` : `ADULT DOSING:
+- Ibuprofen: 200-400mg every 6-8 hours, max 1200mg/day OTC
+- Acetaminophen: 500-1000mg every 4-6 hours, max 3000mg/day
+- Loratadine: 10mg once daily
+- Cetirizine: 10mg once daily
+- Dextromethorphan: 10-20mg every 4 hours
+- Guaifenesin: 200-400mg every 4 hours`}
+
+## SYMPTOM-TO-MEDICATION MAP (use as reference)
+- Fever/Pain → Ibuprofen (first-line) or Acetaminophen (alternative)
+- Dry cough → Dextromethorphan (suppressant). If + fever → flag COVID/flu test
+- Wet/productive cough → Guaifenesin (expectorant). Do NOT suppress wet coughs
+- Sore throat → Benzocaine/Menthol lozenges + warm salt water gargle
+- Running nose/congestion → Loratadine or Cetirizine (non-drowsy antihistamine)
+- Nausea → Dimenhydrinate. Supportive: ginger tea, small meals
+- Diarrhea → ORS always + Loperamide (adults only)
+- Headache → Acetaminophen or Ibuprofen with food
+
+## INTERACTION CHECKS (run before finalizing)
+- Ibuprofen + Aspirin → avoid combination
+- Multiple antihistamines → never combine
+- Dextromethorphan + certain antidepressants → flag
+- Acetaminophen + alcohol → warn
+
+## SEVERITY FLAGS — always check
+Flag if any of these are present:
+- Fever > 39°C in adults / > 38°C in children under 5
+- Difficulty breathing or chest pain
+- Stiff neck + fever → possible meningitis
+- Rash + fever
+- Symptoms persisting beyond 3 days
+- Dry cough + fever → COVID/flu possibility
+- White patches on throat → possible strep
+- Any symptom in infants under 6 months → always flag
+
+${patientContext ? `PATIENT CONTEXT: ${patientContext}` : ''}
 
 Return ONLY valid JSON in this exact format:
 {
   "medications": [
     {
       "name": "Ibuprofen (Advil/Brufen)",
-      "dosage": "400mg",
-      "frequency": "every 6-8 hours as needed",
-      "confidence": "medium"
+      "dosage": "200mg",
+      "frequency": "3 times a day",
+      "confidence": "high",
+      "purpose": "For fever and body ache relief"
+    },
+    {
+      "name": "Cetirizine (Zyrtec)",
+      "dosage": "10mg",
+      "frequency": "once daily",
+      "confidence": "high",
+      "purpose": "For running nose and congestion"
     }
   ],
-  "notes": "These are common suggestions for [condition]. Always consult your doctor before taking any medication."
+  "recommendation": "A comprehensive plain-English paragraph: what to buy, how to take them together, timing advice, and when to see a doctor. Mention that these medications are safe to combine.",
+  "tips": [
+    "Stay hydrated — drink plenty of water throughout the day",
+    "Take ibuprofen with food to protect the stomach",
+    "Cetirizine may cause mild drowsiness",
+    "See a doctor if symptoms persist beyond 3 days"
+  ],
+  "interactions": "None — these medications are safe to take together" | "Description of any interaction between recommended meds",
+  "severity_flag": null | "Seek urgent care if [specific condition detected]",
+  "notes": "Always consult your doctor or pharmacist before taking any medication."
 }
 
 If the input doesn't describe a medical condition, return: { "medications": [], "error": "Please describe a medical condition or symptoms" }`,
         },
         {
           role: "user",
-          content: `Suggest medications for this condition: ${condition}`,
+          content: `I have: ${condition}`,
         },
       ],
-      1000,
+      2000,
     );
     return JSON.parse(content);
   },

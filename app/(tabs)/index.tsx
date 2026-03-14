@@ -130,6 +130,13 @@ export default function ScanScreen() {
         ? await generateExplanation(explanationArgs)
         : null;
 
+      // Merge tips with severity flag and interaction notes from AI
+      const tips = [...(extracted.tips || [])];
+      if (extracted.severity_flag) tips.unshift(`⚠️ ${extracted.severity_flag}`);
+      if (extracted.interactions && typeof extracted.interactions === 'string' && !/^none/i.test(extracted.interactions)) {
+        tips.push(extracted.interactions);
+      }
+
       if (userId && saveScan) {
         setProcessingStep("Saving results...");
         const saveArgs: any = {
@@ -139,6 +146,10 @@ export default function ScanScreen() {
           explanation: explanation ?? "No explanation available.",
         };
         if (condition) saveArgs.condition = condition;
+        if (ageText.trim()) saveArgs.age = ageText.trim();
+        if (allergiesText.trim()) saveArgs.allergies = allergiesText.trim();
+        if (extracted.recommendation) saveArgs.recommendation = extracted.recommendation;
+        if (tips.length > 0) saveArgs.tips = tips;
         const scanId = await saveScan(saveArgs);
         router.push(`/results/${scanId}`);
       } else {
@@ -151,6 +162,10 @@ export default function ScanScreen() {
               interactions,
               explanation: explanation ?? "No explanation available.",
               condition: condition || undefined,
+              age: ageText.trim() || undefined,
+              allergies: allergiesText.trim() || undefined,
+              recommendation: extracted.recommendation || undefined,
+              tips: tips.length > 0 ? tips : undefined,
               scannedAt: Date.now(),
             }),
           },
@@ -211,7 +226,9 @@ export default function ScanScreen() {
     setIsProcessing(true);
     try {
       setProcessingStep("Analyzing prescription...");
-      const extracted = await extractFromText({ prescriptionText: text });
+      const extractArgs: any = { prescriptionText: text };
+      if (ageText.trim()) extractArgs.age = ageText.trim();
+      const extracted = await extractFromText(extractArgs);
       await processExtracted(extracted);
       setPrescriptionText("");
     } catch (error) {
@@ -240,7 +257,10 @@ export default function ScanScreen() {
     setIsProcessing(true);
     try {
       setProcessingStep("Finding medications for your condition...");
-      const extracted = await suggestForCondition({ condition });
+      const suggestArgs: any = { condition };
+      if (ageText.trim()) suggestArgs.age = ageText.trim();
+      if (allergiesText.trim()) suggestArgs.allergies = allergiesText.trim();
+      const extracted = await suggestForCondition(suggestArgs);
       await processExtracted(extracted, condition);
     } catch (error) {
       console.error("Suggestion error:", error);

@@ -57,6 +57,43 @@ export const getDailySchedule = query({
   },
 });
 
+export const seedDayEntries = mutation({
+  args: {
+    userId: v.id("users"),
+    date: v.string(),
+    entries: v.array(
+      v.object({
+        medicationId: v.id("medications"),
+        reminderId: v.id("reminders"),
+        time: v.string(),
+      }),
+    ),
+  },
+  handler: async (ctx, { userId, date, entries }) => {
+    // Get existing entries for this date to avoid duplicates
+    const existing = await ctx.db
+      .query("scheduleEntries")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", date))
+      .collect();
+
+    for (const entry of entries) {
+      const alreadyExists = existing.some(
+        (e) => e.reminderId === entry.reminderId && e.time === entry.time,
+      );
+      if (alreadyExists) continue;
+
+      await ctx.db.insert("scheduleEntries", {
+        userId,
+        medicationId: entry.medicationId,
+        reminderId: entry.reminderId,
+        date,
+        time: entry.time,
+        taken: false,
+      });
+    }
+  },
+});
+
 export const markTaken = mutation({
   args: {
     userId: v.id("users"),

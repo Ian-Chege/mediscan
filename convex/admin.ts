@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 
 // Helper: verify requesting user is an admin
@@ -86,7 +86,37 @@ export const getUserDetail = query({
       }),
     );
 
+    // Sort reminders ascending by time
+    enrichedReminders.sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
+
     return { user, medications, scans, reminders: enrichedReminders };
+  },
+});
+
+// ── Adherence ──
+
+export const getPatientAdherence = query({
+  args: {
+    adminId: v.id("users"),
+    userId: v.id("users"),
+    date: v.string(),
+  },
+  handler: async (ctx, { adminId, userId, date }) => {
+    await requireAdmin(ctx, adminId);
+
+    const todos = await ctx.db
+      .query("todos")
+      .withIndex("by_user_date", (q: any) =>
+        q.eq("userId", userId).eq("scheduledDate", date),
+      )
+      .collect();
+
+    // Sort by scheduled time
+    const sorted = todos.sort((a, b) =>
+      (a.scheduledTime ?? "").localeCompare(b.scheduledTime ?? ""),
+    );
+
+    return sorted;
   },
 });
 
@@ -249,5 +279,77 @@ export const deleteScan = mutation({
   handler: async (ctx, { adminId, scanId }) => {
     await requireAdmin(ctx, adminId);
     await ctx.db.delete(scanId);
+  },
+});
+
+// ── Prescribe treatment ──
+
+export const prescribeTreatment = mutation({
+  args: {
+    adminId: v.id("users"),
+    userId: v.id("users"),
+    name: v.string(),
+    dosage: v.string(),
+    frequency: v.string(),
+    purpose: v.optional(v.string()),
+    instructions: v.optional(v.string()),
+    // Dose schedule: array of "HH:MM" time strings
+    doseTimes: v.array(v.string()),
+    // Today's date (YYYY-MM-DD) for seeding todo entries
+    today: v.string(),
+  },
+  handler: async (ctx, { adminId, userId, name, dosage, frequency, purpose, instructions, doseTimes, today }) => {
+    await requireAdmin(ctx, adminId);
+
+    // 1. Create the medication
+    const medicationId = await ctx.db.insert("medications", {
+      userId,
+      name,
+      dosage,
+      frequency,
+      purpose,
+      instructions,
+      isActive: true,
+      createdAt: Date.now(),
+    });
+
+    // 2. Create a reminder for each dose time
+    const reminderIds: string[] = [];
+    for (const time of doseTimes) {
+      const reminderId = await ctx.db.insert("reminders", {
+        userId,
+        medicationId,
+        time,
+        days: ["daily"],
+        isActive: true,
+        createdAt: Date.now(),
+      });
+      reminderIds.push(reminderId);
+    }
+
+    // 3. Seed today's todo entries so the patient sees them immediately
+    // Build combined task labels per time slot (in case of overlapping times)
+    for (const time of doseTimes) {
+      await ctx.db.insert("todos", {
+        userId,
+        task: `Take ${name} (${dosage})`,
+        medicationName: name,
+        completed: false,
+        scheduledTime: time,
+        scheduledDate: today,
+        status: "pending",
+        createdAt: Date.now(),
+      });
+    }
+
+    return { medicationId, reminderCount: reminderIds.length };
+  },
+});
+
+// Internal helper for use in actions (e.g. sendPushToUser)
+export const getUser = internalQuery({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId }) => {
+    return ctx.db.get(userId);
   },
 });

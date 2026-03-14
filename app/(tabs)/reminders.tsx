@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { useTheme, AppColors } from '@/hooks/useTheme';
 import type { AppShadows } from '@/constants/Colors';
 import { useUser } from '@/contexts/UserContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { scheduleMedicationReminder, cancelReminder } from '@/lib/notifications';
 import { parseTime } from '@/lib/utils';
 
@@ -62,9 +63,17 @@ export default function RemindersScreen() {
   const removeReminder = api && useMutation ? useMutation(api.reminders.remove) : null;
 
   const handleToggle = useCallback(
-    async (id: any, isActive: boolean, notificationId?: string) => {
+    async (id: any, isActive: boolean, notificationId?: string, medName?: string) => {
       if (isActive && notificationId) {
         await cancelReminder(notificationId);
+      }
+      // Also cancel any pending follow-up for this medication
+      if (isActive && medName) {
+        const followUpId = await AsyncStorage.getItem(`followup:${medName}`);
+        if (followUpId) {
+          await cancelReminder(followUpId);
+          await AsyncStorage.removeItem(`followup:${medName}`);
+        }
       }
       await toggleReminder?.({ id });
     },
@@ -81,6 +90,12 @@ export default function RemindersScreen() {
           onPress: async () => {
             if (notificationId) {
               await cancelReminder(notificationId);
+            }
+            // Also cancel any pending follow-up
+            const followUpId = await AsyncStorage.getItem(`followup:${name}`);
+            if (followUpId) {
+              await cancelReminder(followUpId);
+              await AsyncStorage.removeItem(`followup:${name}`);
             }
             await removeReminder?.({ id });
           },
@@ -178,7 +193,7 @@ export default function RemindersScreen() {
               days={item.days}
               isActive={item.isActive}
               onToggle={() =>
-                handleToggle(item._id, item.isActive, item.notificationId)
+                handleToggle(item._id, item.isActive, item.notificationId, item.medicationName)
               }
               onDelete={() =>
                 handleDelete(

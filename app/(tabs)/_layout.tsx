@@ -1,11 +1,18 @@
 import { useUserRole } from "@/contexts/UserContext";
-import { api } from "@/convex/_generated/api";
 import { useTheme } from "@/hooks/useTheme";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { useQuery } from "convex/react";
 import { Tabs } from "expo-router";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
+
+// Convex hooks — imported conditionally once Convex is configured
+let useQuery: any, api: any;
+try {
+  useQuery = require("convex/react").useQuery;
+  api = require("@/convex/_generated/api").api;
+} catch {
+  // Convex not yet set up
+}
 
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>["name"];
@@ -17,7 +24,8 @@ function TabBarIcon(props: {
 // Badge shown on the Profile tab when there are pending oversight requests
 function ProfileTabIcon({ color }: { color: string }) {
   const role = useUserRole();
-  const pendingOversight = useQuery(api.oversightRequests.myIncoming);
+  const pendingOversight =
+    api && useQuery ? useQuery(api.oversightRequests.myIncoming) : undefined;
   const hasBadge = role === "patient" && (pendingOversight?.length ?? 0) > 0;
 
   return (
@@ -112,29 +120,19 @@ export default function TabLayout() {
       />
       <Tabs.Screen
         name="schedule"
-        options={{
-          title: "Schedule",
-          headerShown: false,
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="calendar" color={color} />
-          ),
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="reminders"
-        options={{
-          title: "Reminders",
-          headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="todos"
         options={{
-          title: "To-Do",
+          title: "My Day",
           headerShown: false,
           tabBarIcon: ({ color }) => (
-            <TabBarIcon name="check-square" color={color} />
+            <TabBarIcon name="calendar-check-o" color={color} />
           ),
         }}
       />

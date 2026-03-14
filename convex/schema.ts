@@ -42,6 +42,7 @@ export default defineSchema({
     days: v.array(v.string()),
     isActive: v.boolean(),
     notificationId: v.optional(v.string()),
+    followUpNotificationId: v.optional(v.string()),
     createdAt: v.number(),
   })
     .index("by_user", ["userId"])
@@ -51,12 +52,15 @@ export default defineSchema({
     userId: v.id("users"),
     imageStorageId: v.optional(v.id("_storage")),
     condition: v.optional(v.string()),
+    age: v.optional(v.string()),
+    allergies: v.optional(v.string()),
     extractedMedications: v.array(
       v.object({
         name: v.string(),
         dosage: v.string(),
         frequency: v.string(),
         confidence: v.optional(v.string()),
+        purpose: v.optional(v.string()),
       }),
     ),
     interactions: v.array(
@@ -68,6 +72,8 @@ export default defineSchema({
       }),
     ),
     explanation: v.string(),
+    recommendation: v.optional(v.string()),
+    tips: v.optional(v.array(v.string())),
     scannedAt: v.number(),
   }).index("by_user", ["userId"]),
 
@@ -76,8 +82,13 @@ export default defineSchema({
     task: v.string(),
     medicationName: v.optional(v.string()),
     completed: v.boolean(),
+    scheduledTime: v.optional(v.string()),
+    scheduledDate: v.optional(v.string()),
+    status: v.optional(v.string()),
     createdAt: v.number(),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_date", ["userId", "scheduledDate"]),
 
   scheduleEntries: defineTable({
     userId: v.id("users"),

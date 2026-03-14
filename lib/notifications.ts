@@ -101,6 +101,42 @@ export async function scheduleMedicationReminder(
   return id;
 }
 
+/**
+ * Schedule a one-shot follow-up reminder that fires 30 minutes from NOW.
+ *
+ * This should be called reactively when the main daily notification fires
+ * (inside the notificationReceived listener), NOT at medication-setup time.
+ * Using a relative TimeInterval trigger guarantees the follow-up always
+ * arrives 30 minutes after the original — regardless of when the med was
+ * saved or what time zone quirks exist with DAILY triggers.
+ */
+export async function scheduleFollowUpReminder(
+  medicationName: string,
+  dosage: string,
+  timeDisplay: string,
+): Promise<string> {
+  if (Platform.OS === 'web') {
+    console.log(`[web] Follow-up reminder scheduled for ${medicationName} in 30 min`);
+    return `web-followup-${Date.now()}`;
+  }
+
+  const id = await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Medication Reminder',
+      body: `Don't forget your ${medicationName} ${dosage} — you scheduled it for ${timeDisplay}`,
+      sound: true,
+      data: { medicationName, dosage, isFollowUp: true },
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      seconds: 30 * 60, // 30 minutes
+      repeats: false,
+    },
+  });
+
+  return id;
+}
+
 export async function cancelReminder(notificationId: string): Promise<void> {
   if (Platform.OS === 'web') return;
   await Notifications.cancelScheduledNotificationAsync(notificationId);
