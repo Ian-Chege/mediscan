@@ -7,12 +7,29 @@
 export function parseDosesPerDay(frequency: string): number {
   const freq = frequency.toLowerCase().trim();
 
-  // "X times daily/a day/per day"
-  const timesMatch = freq.match(/(\d+)\s*(?:times?\s*(?:daily|a\s*day|per\s*day))/);
-  if (timesMatch) return Number(timesMatch[1]);
+  // "as needed", "prn", etc. → skip scheduling (check first to avoid false positives)
+  if (/as\s*needed|prn|after\s*each|when\s*required|loose\s*stool/i.test(freq)) return 0;
 
-  if (/once\s*(?:daily|a\s*day)/.test(freq)) return 1;
-  if (/twice\s*(?:daily|a\s*day)/.test(freq)) return 2;
+  // Medical abbreviations: OD, BD/BID, TDS/TID, QID
+  if (/\bod\b/.test(freq)) return 1;
+  if (/\b(bd|bid)\b/.test(freq)) return 2;
+  if (/\b(tds|tid)\b/.test(freq)) return 3;
+  if (/\bqid\b/.test(freq)) return 4;
+
+  // "X times daily/a day/per day" or "Xx daily"
+  const timesMatch = freq.match(/(\d+)\s*(?:x|times?\s*(?:daily|a\s*day|per\s*day)?)/);
+  if (timesMatch) {
+    const n = Number(timesMatch[1]);
+    if (n >= 1 && n <= 12) return n;
+  }
+
+  // "once", "twice", "thrice" — with or without "daily/a day"
+  if (/\bonce\b/.test(freq)) return 1;
+  if (/\btwice\b/.test(freq)) return 2;
+  if (/\bthrice\b/.test(freq)) return 3;
+
+  // "daily" / "every day" / "once daily" / "one time"
+  if (/\b(daily|every\s*day|one\s*time)\b/.test(freq)) return 1;
 
   // "every X-Y hours" — use the higher interval (fewer doses)
   const rangeMatch = freq.match(/every\s*(\d+)\s*-\s*(\d+)\s*(?:hours?|hrs?)/);
@@ -22,8 +39,9 @@ export function parseDosesPerDay(frequency: string): number {
   const everyMatch = freq.match(/every\s*(\d+)\s*(?:hours?|hrs?)/);
   if (everyMatch) return Math.floor(24 / Number(everyMatch[1]));
 
-  // "as needed", "prn", etc. → skip scheduling
-  if (/as\s*needed|prn|after\s*each|when\s*required|loose\s*stool/i.test(freq)) return 0;
+  // "morning and evening" → 2, "morning, afternoon and evening" → 3
+  if (/morning.*(afternoon|noon|midday).*evening/.test(freq)) return 3;
+  if (/morning.*evening|evening.*morning/.test(freq)) return 2;
 
   return 0;
 }

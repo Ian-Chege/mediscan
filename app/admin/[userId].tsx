@@ -75,6 +75,7 @@ export default function AdminUserDetail() {
   const [rxStartHour, setRxStartHour] = useState(8);
   const [rxStartMinute, setRxStartMinute] = useState(0);
   const [prescribing, setPrescribing] = useState(false);
+  const [prescribeError, setPrescribeError] = useState('');
 
   // Client-side missed computation (same logic as patient's My Day screen)
   const computeIsMissed = useCallback((todo: any): boolean => {
@@ -152,65 +153,51 @@ export default function AdminUserDetail() {
   };
 
   const handlePrescribe = async () => {
+    setPrescribeError('');
+
     if (!rxName.trim() || !rxDosage.trim() || !rxFrequency.trim()) {
-      Alert.alert('Missing fields', 'Name, dosage, and frequency are required.');
+      setPrescribeError('Name, dosage, and frequency are required.');
       return;
     }
 
     const dosesPerDay = parseDosesPerDay(rxFrequency);
     if (dosesPerDay === 0) {
-      Alert.alert(
-        'Unrecognized frequency',
-        `Could not determine a schedule from "${rxFrequency}". Use formats like "twice daily", "3 times a day", or "every 8 hours".`,
-      );
+      setPrescribeError(`Could not parse frequency "${rxFrequency}". Try "twice daily", "3x daily", "every 8 hours", "BD", "TDS".`);
       return;
     }
 
     const doseTimes = computeDoseTimes(dosesPerDay, rxStartHour, rxStartMinute);
     if (doseTimes.length === 0) {
-      Alert.alert('No schedule', 'Could not compute dose times for this frequency.');
+      setPrescribeError('Could not compute dose times for this frequency.');
       return;
     }
 
-    const dosePreview = doseTimes.map(formatTime12h).join(', ');
-    Alert.alert(
-      'Confirm Prescription',
-      `${rxName} ${rxDosage}\n${rxFrequency}\n\nDose times: ${dosePreview}\n\nThis will appear on the patient's My Day screen.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Prescribe',
-          onPress: async () => {
-            setPrescribing(true);
-            try {
-              await prescribeTreatment?.({
-                adminId: adminId as any,
-                userId: targetUserId as any,
-                name: rxName.trim(),
-                dosage: rxDosage.trim(),
-                frequency: rxFrequency.trim(),
-                purpose: rxPurpose.trim() || undefined,
-                instructions: rxInstructions.trim() || undefined,
-                doseTimes,
-                today,
-              });
-              Alert.alert('Prescribed', `${rxName} added to ${patientName}'s treatment plan.`);
-              // Reset form
-              setRxName('');
-              setRxDosage('');
-              setRxFrequency('');
-              setRxPurpose('');
-              setRxInstructions('');
-              setShowPrescribeForm(false);
-            } catch (err: any) {
-              Alert.alert('Error', err?.message ?? 'Failed to prescribe treatment.');
-            } finally {
-              setPrescribing(false);
-            }
-          },
-        },
-      ],
-    );
+    setPrescribing(true);
+    try {
+      await prescribeTreatment?.({
+        adminId: adminId as any,
+        userId: targetUserId as any,
+        name: rxName.trim(),
+        dosage: rxDosage.trim(),
+        frequency: rxFrequency.trim(),
+        purpose: rxPurpose.trim() || undefined,
+        instructions: rxInstructions.trim() || undefined,
+        doseTimes,
+        today,
+      });
+      Alert.alert('Prescribed', `${rxName} added to ${patientName}'s treatment plan.`);
+      setRxName('');
+      setRxDosage('');
+      setRxFrequency('');
+      setRxPurpose('');
+      setRxInstructions('');
+      setPrescribeError('');
+      setShowPrescribeForm(false);
+    } catch (err: any) {
+      setPrescribeError(err?.message ?? 'Failed to prescribe treatment.');
+    } finally {
+      setPrescribing(false);
+    }
   };
 
   const handleSendNotification = async () => {
@@ -327,8 +314,14 @@ export default function AdminUserDetail() {
               );
             })()}
 
+            {prescribeError !== '' && (
+              <Text style={[styles.itemMeta, { color: colors.danger, marginTop: 2 }]}>
+                {prescribeError}
+              </Text>
+            )}
+
             <Pressable
-              style={[styles.prescribeButton, prescribing && { opacity: 0.6 }]}
+              style={[styles.prescribeButton, prescribing && { opacity: 0.6 }, { cursor: 'pointer' } as any]}
               onPress={handlePrescribe}
               disabled={prescribing}
             >
