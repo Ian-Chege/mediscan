@@ -40,3 +40,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Google Cloud / Firebase service account credentials
+druscan-*.json
+*-firebase-adminsdk-*.json
+*-service-account*.json

@@ -22,6 +22,8 @@ export const sendPushToUser = action({
       throw new Error("Patient has no push token registered");
     }
 
+    console.log(`Sending push to token: ${user.pushToken.substring(0, 30)}...`);
+
     // Send via Expo Push API
     const response = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
@@ -34,11 +36,23 @@ export const sendPushToUser = action({
         title,
         body,
         sound: "default",
+        priority: "high",
+        channelId: "medication-reminders",
       }),
     });
 
+    const result = await response.json();
+    console.log("Expo push response:", JSON.stringify(result));
+
     if (!response.ok) {
-      throw new Error(`Push send failed: ${response.status}`);
+      throw new Error(`Expo API error ${response.status}: ${JSON.stringify(result)}`);
+    }
+
+    // Expo returns 200 even on delivery failure — check the actual ticket status
+    const ticket = result.data?.[0] ?? result;
+    if (ticket.status === "error") {
+      const detail = ticket.details?.error ?? ticket.message ?? "Unknown error";
+      throw new Error(`Push failed: ${detail}`);
     }
   },
 });

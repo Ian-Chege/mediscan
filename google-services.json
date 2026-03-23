@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "640396889966",
+    "project_id": "druscan-2c674",
+    "storage_bucket": "druscan-2c674.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:640396889966:android:2ea6d5e8422ce4c1b8bb7f",
+        "android_client_info": {
+          "package_name": "com.ianoviewcy.mediscan"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvB11D3ad5KwzNYrSuhdM5fE1G1VHNNJ8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

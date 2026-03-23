@@ -58,9 +58,11 @@ function AuthGate() {
   const responseListener = useRef<any>(null);
   const updatePushToken = useMutation(api.users.updatePushToken);
 
-  // Register for push notifications and save token to Convex
+  // Register for push notifications and save token to Convex.
+  // Wait for `user` (not just isAuthenticated) to ensure the Convex auth
+  // session is fully established before calling the mutation.
   useEffect(() => {
-    if (Platform.OS !== "web" && isAuthenticated) {
+    if (Platform.OS !== "web" && isAuthenticated && user) {
       registerForPushNotifications().then((token) => {
         if (token) {
           updatePushToken({ pushToken: token }).catch((err: any) =>
@@ -108,7 +110,7 @@ function AuthGate() {
         responseListener.current?.remove();
       };
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   // Route based on auth state
   useEffect(() => {
