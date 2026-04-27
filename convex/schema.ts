@@ -1,3 +1,4 @@
+// This file defines the database schema for the medication management application using Convex's schema definition utilities. It includes tables for users, medications, reminders, scans, todos, schedule entries, and oversight requests, along with appropriate indexes for efficient querying.
 import { authTables } from "@convex-dev/auth/server";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
